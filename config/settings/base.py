@@ -165,6 +165,7 @@ REST_FRAMEWORK = {
         'anon': '60/min',
         'user': '300/min',
         'register': '10/hour',
+        'login': '5/min',
     },
     'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
     'DEFAULT_FILTER_BACKENDS': [
@@ -185,21 +186,43 @@ SIMPLE_JWT = {
 # logging
 LOGGING = {
     'version': 1,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name} {message}',
+            'style': '{',
+        },
+        'simple': {
+            'format': '{levelname} {message}',
+            'style': '{',
+        },
+    },
     'handlers': {
         'file': {
             'class': 'logging.handlers.RotatingFileHandler',
             'filename': str(BASE_DIR / 'logs' / 'app.log'),
-            'maxBytes': 10 * 1024 * 1024,  # 10MB
+            'maxBytes': 10 * 1024 * 1024,
             'backupCount': 5,
+            'formatter': 'verbose',
         },
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'simple',
         },
+    },
+    'root': {
+        'handlers': ['file', 'console'],
+        'level': 'WARNING',
     },
     'loggers': {
         'django': {
             'handlers': ['file', 'console'],
             'level': 'WARNING',
+            'propagate': False,
+        },
+        'django.request': {
+            'handlers': ['file', 'console'],
+            'level': 'ERROR',
+            'propagate': False,
         },
         'apps': {
             'handlers': ['file', 'console'],

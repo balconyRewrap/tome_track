@@ -18,24 +18,26 @@ from django.conf import settings
 from django.contrib import admin
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
-from rest_framework_simplejwt.views import TokenBlacklistView, TokenObtainPairView, TokenRefreshView
 
-from apps.users.views import RegisterView
+from apps.users.views import AuthCheckView, CustomTokenObtainPairView, CustomTokenRefreshView, RegisterView, LogoutView
 
+# admin
 urlpatterns = [
     path('admin/', admin.site.urls),
 ]
 
+# auth
 urlpatterns += [
-    path('api/v1/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/v1/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    path('api/v1/auth/register/', RegisterView.as_view(), name='register'),
+    path('api/v1/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/v1/auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
+    path('api/v1/auth/logout/', LogoutView.as_view(), name='logout'),
+    # TODO: delete after whole testing
+    path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
+
 ]
 
-urlpatterns += [
-    path('api/v1/register/', RegisterView.as_view(), name='register'),
-]
-
+# debug
 if getattr(settings, 'DEBUG', False):
     urlpatterns += [
         path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),

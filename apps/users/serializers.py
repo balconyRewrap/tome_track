@@ -4,6 +4,10 @@ from django.contrib.auth.models import AbstractUser
 from django.contrib.auth.password_validation import validate_password
 from django.core.validators import EmailValidator
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.tokens import Token
+
+from apps.users.models import User as UserModel
 
 User = get_user_model()
 
@@ -85,3 +89,28 @@ class RegisterSerializer(serializers.Serializer):
             password=validated_data["password"],
         )
         return user  # noqa: RET504
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Custom serializer for obtaining JWT tokens that includes the user's role in the token payload."""
+
+    @classmethod
+    def get_token(cls, user) -> Token:
+        token = super().get_token(user)
+        # custom claims will be added later if needed
+        token["role"] = user.role
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        # User has it, but pylance doesn't recognize it, so we ignore the type errors here
+        data["user_id"] = self.user.id  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+        data["email"] = self.user.email  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+        data["role"] = self.user.role  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+        return data
+
+
+class LogoutSerializer(serializers.Serializer):
+    """Serializer for user logout."""
+
+    refresh = serializers.CharField()

@@ -8,6 +8,7 @@ settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         'anon': '600/min',
         'user': '3000/min',
         'register': '1000/hour',
+        'login': '1000/hour',
     }
 REGISTER_URL = reverse("register")  # Убедитесь, что в urls.py name="register"
 
