@@ -10,6 +10,7 @@ settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
         'anon': '60/min',
         'user': '300/min',
         'register': '10/hour',
+        'login': '5/min',
     }
 
 
@@ -32,7 +33,6 @@ class ThrottleTests(APITestCase):
     def test_register_throttle(self):
         """More than 10 registration attempts from the same IP within an hour should be throttled."""
         throttle_remote_addr = '127.0.0.11'
-        print(settings.REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"])
         for i in range(10):
             data = self.valid_data.copy()
             data["email"] = f"user{i}@example.com"
@@ -45,4 +45,13 @@ class ThrottleTests(APITestCase):
         data["username"] = "user29"
         response = self.client.post(REGISTER_URL, data, REMOTE_ADDR=throttle_remote_addr)
         print(response)
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+    
+    def test_login_throttle(self):
+        """More than 5 login attempts with wrong credentials from the same IP within a minute should be throttled."""
+        throttle_remote_addr = '127.0.0.4'
+        for i in range(5):
+            response = self.client.post(reverse("token_obtain_pair"), {"email": "user@example.com", "password": "wrong"}, REMOTE_ADDR=throttle_remote_addr)
+        # 6-й запрос должен быть заблокирован
+        response = self.client.post(reverse("token_obtain_pair"), {"email": "user@example.com", "password": "wrong"}, REMOTE_ADDR=throttle_remote_addr)
         self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)

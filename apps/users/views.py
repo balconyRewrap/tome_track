@@ -1,12 +1,16 @@
+import logging
+
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.generics import GenericAPIView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from apps.users.serializers import RegisterSerializer
-from apps.users.throttles import RegisterThrottle
+from apps.users.serializers import CustomTokenObtainPairSerializer, LogoutSerializer, RegisterSerializer
+from apps.users.throttles import LoginThrottle, RegisterThrottle
 
 
 @extend_schema(
@@ -59,3 +63,139 @@ class RegisterView(GenericAPIView):
             "username": user.username,
         }
         return Response(data, status=status.HTTP_201_CREATED)
+
+
+@extend_schema(
+    summary="User Authentication (JWT Token Obtain)",
+    description="Endpoint for obtaining JWT tokens. Requires email and password.",
+    request=CustomTokenObtainPairSerializer,
+    responses={200: OpenApiResponse(
+        response=CustomTokenObtainPairSerializer,
+        ),
+        401: OpenApiResponse(description="No active account found with the given credentials."),
+    },
+    examples=[
+        OpenApiExample(
+            "Request example",
+            value={
+                "email": "user@example.com",
+                "password": "StrongPass123",
+            },
+            request_only=True,
+        ),
+        OpenApiExample(
+            "Response example",
+            value={
+                "refresh": "token_refresh_string",
+                "access": "token_access_string",
+                "user_id": 1,
+                "email": "user@example.com",
+                "role": "user",
+            },
+            response_only=True,
+        ),
+    ],
+    tags=['Authentication'],
+)
+class CustomTokenObtainPairView(TokenObtainPairView):
+    """Custom view for obtaining JWT tokens that uses a custom serializer to include user role in the token payload."""
+
+    serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [LoginThrottle]  # noqa: RUF012
+
+
+@extend_schema(
+    summary="User Logout",
+    description="Endpoint for logging out a user and blacklisting their refresh token.",
+    request=LogoutSerializer,
+    responses={205: OpenApiResponse(
+        response=LogoutSerializer,
+        ),
+        400: OpenApiResponse(description="Invalid token."),
+        401: OpenApiResponse(description="Authentication credentials were not provided."),
+    },
+    examples=[
+        OpenApiExample(
+            "Request example",
+            value={
+                "refresh": "token_refresh_string",
+            },
+            request_only=True,
+        ),
+        OpenApiExample(
+            "Response example",
+            response_only=True,
+        ),
+    ],
+    tags=['Authentication'],
+)
+class LogoutView(GenericAPIView):
+    """User logout endpoint that blacklists the refresh token."""
+
+    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    serializer_class = LogoutSerializer
+
+    def post(self, request: Request, *args, **kwargs) -> Response:
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        refresh_token = serializer.validated_data["refresh"]
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response(status=status.HTTP_205_RESET_CONTENT)
+        except Exception:
+            logger = logging.getLogger(__name__)
+            logger.exception("Error occurred while blacklisting refresh token")
+            return Response({"error": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+
+# Used only for tagging in API docs
+@extend_schema(
+    summary="Token Refresh",
+    description="Endpoint for refreshing JWT tokens. Requires refresh token.",
+    responses={200: OpenApiResponse(),
+        401: OpenApiResponse(description="Token is blacklisted"),
+    },
+    examples=[
+        OpenApiExample(
+            "Request example",
+            value={
+                "refresh": "token_refresh_string",
+            },
+            request_only=True,
+        ),
+        OpenApiExample(
+            "Response example",
+            value={
+                "refresh": "token_refresh_string",
+                "access": "token_access_string",
+            },
+            response_only=True,
+        ),
+    ],
+    tags=['Authentication'],
+)
+class CustomTokenRefreshView(TokenRefreshView):  # noqa: D101
+    pass
+
+
+# TODO: delete after testing whole authentification flow and token payload
+from rest_framework import serializers
+
+
+class AuthCheckSerializer(serializers.Serializer):
+    detail = serializers.CharField()
+    user_id = serializers.IntegerField()
+    email = serializers.EmailField()
+
+@extend_schema(tags=['Authentication'])
+class AuthCheckView(GenericAPIView):  # noqa: D101
+    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    serializer_class = AuthCheckSerializer  # Добавьте это
+
+    def get(self, request, *args, **kwargs):
+        data = {
+            "detail": "Authenticated",
+            "user_id": request.user.id,
+            "email": request.user.email,
+        }
+        return Response(data)
