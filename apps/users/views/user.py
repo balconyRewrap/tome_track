@@ -13,6 +13,7 @@ from rest_framework.response import Response
 from apps.users.models import PasswordResetToken, User
 from apps.users.serializers import (
     ChangeEmailSerializer,
+    PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetSerializer,
     UserProfileSerializer,
@@ -326,3 +327,57 @@ class PasswordResetConfirmView(GenericAPIView):
         if not reset_token:
             return False
         return not reset_token.created_at < timezone.now() - timezone.timedelta(hours=1)
+
+
+@extend_schema(
+    summary="Change user password",
+    description="Endpoint for changing the authenticated user's password. Requires the current password for verification.",
+    request=PasswordChangeSerializer,
+    responses={
+        200: OpenApiResponse(
+            response=PasswordChangeSerializer,
+            description="Password updated successfully.",
+        ),
+        400: OpenApiResponse(description="Validation error. Incorrect current password or new password validation failed."),
+        401: OpenApiResponse(description="Authentication credentials were not provided or Token is no longer valid."),
+    },
+    examples=[
+        OpenApiExample(
+            "Request example",
+            value={
+                "current_password": "StrongPass123",
+                "new_password": "NewStrongPass123",
+            },
+            request_only=True,
+        ),
+        OpenApiExample(
+            "Response example",
+            value={
+                "detail": "Password updated successfully.",
+            },
+            response_only=True,
+        ),
+    ],
+    tags=['Users'],
+)
+class PasswordChangeView(GenericAPIView):
+    """Endpoint for changing the authenticated user's password."""
+
+    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    serializer_class = PasswordChangeSerializer
+
+    def post(self, request: Request) -> Response:
+        """Post method for changing the authenticated user's password.
+
+        Returns:
+            Response:
+                A response with status 200 OK if the password was changed successfully, 
+                or 400 Bad Request if validation failed.
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = request.user
+        user.set_password(serializer.validated_data['new_password'])
+        user.token_version += 1
+        user.save()
+        return Response({"detail": "Password updated successfully."}, status=status.HTTP_200_OK)

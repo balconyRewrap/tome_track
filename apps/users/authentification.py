@@ -3,12 +3,16 @@
 This module defines a custom JWT authentication scheme that includes token versioning to allow for token invalidation.
 It also includes an OpenAPI extension to document the custom authentication scheme in the API schema.
 """
+from typing import TYPE_CHECKING
+
 from django.contrib.auth import get_user_model
 from drf_spectacular.extensions import OpenApiAuthenticationExtension
-from drf_spectacular.openapi import AutoSchema
 from rest_framework_simplejwt.authentication import AuthUser, JWTAuthentication
 from rest_framework_simplejwt.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.tokens import Token
+
+if TYPE_CHECKING:
+    from drf_spectacular.openapi import AutoSchema
 
 User = get_user_model()
 
@@ -19,7 +23,7 @@ class TokenVersionJWTAuthenticationScheme(OpenApiAuthenticationExtension):
     target_class = 'apps.users.authentification.TokenVersionJWTAuthentication'
     name = 'JWTAuthWithTokenVersion'
 
-    def get_security_definition(self, auto_schema: AutoSchema) -> dict:  # noqa: PLR6301, ARG002
+    def get_security_definition(self, auto_schema: 'AutoSchema') -> dict:  # noqa: PLR6301, ARG002
         """Return the OpenAPI security scheme definition for JWT authentication with token versioning.
 
         Returns:

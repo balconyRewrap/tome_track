@@ -190,6 +190,7 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     """Serializer for confirming a password reset."""
 
     token = serializers.CharField()
+    old_password = serializers.CharField(write_only=True, required=False)
     new_password = serializers.CharField(write_only=True, min_length=8)
 
     def validate_new_password(self, value: str) -> str:  # noqa: PLR6301
@@ -208,3 +209,41 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
         if value.isdigit():
             raise serializers.ValidationError("Password must contain both letters and numbers.")
         return value
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Serializer for changing user password."""
+
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_new_password(self, value: str) -> str:  # noqa: PLR6301
+        """Validate the new password using Django's built-in validators and ensure it contains both letters and numbers.
+
+        Returns:
+            str: The validated new password.
+
+        Raises:
+            serializers.ValidationError: If the new password does not meet the validation criteria.
+        """
+        try:
+            validate_password(value)
+        except ValidationError as e:
+            raise serializers.ValidationError("Password is too weak.") from e
+        if value.isdigit():
+            raise serializers.ValidationError("Password must contain both letters and numbers.")
+        return value
+
+    def validate(self, attrs: dict) -> dict:
+        """Validate that the provided current password is correct.
+
+        Returns:
+            dict: The validated data.
+
+        Raises:
+            serializers.ValidationError: If the provided current password is incorrect.
+        """
+        user = self.context['request'].user
+        if not user.check_password(attrs['current_password']):
+            raise serializers.ValidationError({"current_password": "Incorrect password."})
+        return attrs

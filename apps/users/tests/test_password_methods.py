@@ -5,7 +5,6 @@ from rest_framework import status
 from django.contrib.auth import get_user_model
 from apps.users.models import PasswordResetToken
 from datetime import timedelta
-from django.conf import settings
 from django.core.cache import cache
 
 User = get_user_model()
@@ -28,6 +27,7 @@ def get_token(api_client, user):
     return _get_token
 
 def test_reset_password_different_email(api_client, user, get_token):
+    cache.clear()
     token = get_token(user.email, "StrongPass123")
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
@@ -96,3 +96,29 @@ def test_reset_password_expired_token(api_client, user, get_token):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     print(response.data)
     assert "Invalid or expired token." in response.data['error']['details']['token']
+
+def test_password_change(api_client, user, get_token):
+    cache.clear()
+    token = get_token(user.email, "StrongPass123")
+    url = reverse("password_change")
+    # no credentials check
+    response = api_client.post(url, {"current_password": "StrongPass123", "new_password": "NewStrongPass123"}, format="json")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    # bad current password returns 400 with error message
+    response = api_client.post(url, {"current_password": "WrongPass123", "new_password": "NewStrongPass123"}, format="json")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "current_password" in response.data['error']['details']
+    # successful password change returns 200 with detail message
+    response = api_client.post(url, {"current_password": "StrongPass123", "new_password": "NewStrongPass123"}, format="json")
+    assert response.status_code == status.HTTP_200_OK
+    assert "detail" in response.data
+    assert response.data["detail"] == "Password updated successfully."
+
+    # old password no longer works
+    response = api_client.post(reverse("token_obtain_pair"), {"email": user.email, "password": "StrongPass123"}, format="json")
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    # new password works
+    response = api_client.post(reverse("token_obtain_pair"), {"email": user.email, "password": "NewStrongPass123"}, format="json")
+    assert response.status_code == status.HTTP_200_OK

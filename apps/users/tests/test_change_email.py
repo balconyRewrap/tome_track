@@ -3,6 +3,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 
 User = get_user_model()
 
@@ -23,6 +24,7 @@ def get_token(api_client, user):
     return _get_token
 
 def test_change_email_same_email(api_client, user, get_token):
+    cache.clear()
     token = get_token(user.email, "StrongPass123")
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 

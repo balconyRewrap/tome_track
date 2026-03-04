@@ -28,6 +28,7 @@ from apps.users.views.auth import (
 )
 from apps.users.views.user import (
     ChangeEmailView,
+    PasswordChangeView,
     PasswordResetConfirmView,
     PasswordResetView,
     UserMeView,
@@ -55,6 +56,7 @@ urlpatterns += [
     path('api/v1/users/me/change-email/', ChangeEmailView.as_view(), name='change_email'),
     path('api/v1/users/password/reset/', PasswordResetView.as_view(), name='password_reset'),
     path('api/v1/users/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('api/v1/users/password/change/', PasswordChangeView.as_view(), name='password_change'),
 ]
 
 # debug
