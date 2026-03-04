@@ -6,6 +6,9 @@ from typing import Any
 
 from django.core.cache import cache
 
+# Sentinel object to distinguish a cached None from a cache miss
+_MISSING = object()
+
 
 # args can be anything hashable, so type is not easily expressed without a lot of imports, so we use Any
 def cache_key(prefix: str, *args: Any) -> str:  # noqa: ANN401
@@ -58,8 +61,8 @@ def cached_view(timeout: int, key_func: Callable) -> Callable:
         @wraps(view_func)
         def _wrapped_view(request, *args, **kwargs):
             key = key_func(request, *args, **kwargs)
-            result = cache.get(key)
-            if result is not None:
+            result = cache.get(key, _MISSING)
+            if result is not _MISSING:
                 return result
             response = view_func(request, *args, **kwargs)
             cache.set(key, response, timeout)

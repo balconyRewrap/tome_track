@@ -19,7 +19,20 @@ from django.contrib import admin
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
-from apps.users.views import AuthCheckView, CustomTokenObtainPairView, CustomTokenRefreshView, RegisterView, LogoutView
+from apps.users.views.auth import (
+    AuthCheckView,
+    CustomTokenObtainPairView,
+    CustomTokenRefreshView,
+    LogoutView,
+    RegisterView,
+)
+from apps.users.views.user import (
+    ChangeEmailView,
+    PasswordChangeView,
+    PasswordResetConfirmView,
+    PasswordResetView,
+    UserMeView,
+)
 
 # admin
 urlpatterns = [
@@ -35,6 +48,15 @@ urlpatterns += [
     # TODO: delete after whole testing
     path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
 
+]
+
+# user
+urlpatterns += [
+    path('api/v1/users/me/', UserMeView.as_view(), name='user_me'),
+    path('api/v1/users/me/change-email/', ChangeEmailView.as_view(), name='change_email'),
+    path('api/v1/users/password/reset/', PasswordResetView.as_view(), name='password_reset'),
+    path('api/v1/users/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
+    path('api/v1/users/password/change/', PasswordChangeView.as_view(), name='password_change'),
 ]
 
 # debug

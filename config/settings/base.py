@@ -145,12 +145,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])  # pyright: ignore[reportArgumentType]
-
+CORS_ALLOWED_CREDENTIALS = True
 
 # DRF
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'apps.users.authentification.TokenVersionJWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
@@ -166,6 +166,7 @@ REST_FRAMEWORK = {
         'user': '300/min',
         'register': '10/hour',
         'login': '5/min',
+        'password_reset': '5/hour',
     },
     'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
     'DEFAULT_FILTER_BACKENDS': [
@@ -245,3 +246,8 @@ SPECTACULAR_SETTINGS = {
 ADMIN_SITE_HEADER = "Book Tracker Admin"
 ADMIN_SITE_TITLE = "Book Tracker Admin"
 ADMIN_INDEX_TITLE = "Book Tracker Administration"
+ALLOWED_ADMIN_IPS = ['127.0.0.1', '172.19.0.1']  # Add my local IP address here
+
+# static
+STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'

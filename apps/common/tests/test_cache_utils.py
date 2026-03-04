@@ -1,4 +1,4 @@
-from apps.common.cache_utils import cache_key, cached_view, invalidate_pattern, cache
+from apps.common.cache_utils import cache_key, cached_view, invalidate_pattern, cache, _MISSING
 import pytest
 from unittest.mock import patch
 from django.test import RequestFactory
@@ -42,7 +42,7 @@ def test_cached_view_sets_cache(mocker):
     rf = RequestFactory()
     request = rf.get('/')
     key = 'testkey'
-    mocker.patch('django.core.cache.cache.get', return_value=None)
+    mocker.patch('django.core.cache.cache.get', return_value=_MISSING)
     set_mock = mocker.patch('django.core.cache.cache.set')
     @cached_view(timeout=10, key_func=lambda r: key)
     def view(request): return 'fresh'
