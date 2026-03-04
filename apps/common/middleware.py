@@ -2,9 +2,10 @@
 
 from collections.abc import Callable
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden
 
-ALLOWED_ADMIN_IPS = ['127.0.0.1', '172.19.0.1']  # Add my local IP address here
+ALLOWED_ADMIN_IPS = getattr(settings, "ALLOWED_ADMIN_IPS", [])
 
 
 class AdminIPRestrictionMiddleware:
@@ -23,7 +24,8 @@ class AdminIPRestrictionMiddleware:
         Returns:
             An HTTP response object, either allowing access to the admin interface or returning a 403 Forbidden
         """
-        real_ip = request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR'))
+        x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR', '')
+        real_ip = x_forwarded.split(',')[0].strip() or request.META.get('REMOTE_ADDR')
         if request.path.startswith('/admin/') and real_ip not in ALLOWED_ADMIN_IPS:
             return HttpResponseForbidden("Admin access denied by IP restriction.")
         return self.get_response(request)

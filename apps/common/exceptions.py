@@ -54,6 +54,7 @@ def custom_exception_handler(exc: Exception, context: dict) -> Response | None:
         response.data = {
             "error": {
                 "code": response.status_code,
+                # TODO: fall if data - list
                 "message": response.data.get('detail', 'Error'),
                 "details": response.data,
             },

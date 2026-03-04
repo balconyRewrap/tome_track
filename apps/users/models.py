@@ -7,6 +7,13 @@ from django.db import models
 from apps.common.models import TimestampedModel
 
 
+class UserRole(models.TextChoices):
+    """Available roles for a user."""
+
+    USER = 'user', 'User'
+    ADMIN = 'admin', 'Admin'
+
+
 class UserManager(BaseUserManager):
     """Custom user manager for the User model."""
 
@@ -72,10 +79,23 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
 
     email = models.EmailField(unique=True)
     username = models.CharField(max_length=50, unique=True)
-    role = models.CharField(choices=[('user', 'user'), ('admin', 'admin')], default='user')
+    role = models.CharField(choices=UserRole.choices, max_length=10, default=UserRole.USER)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+
+    token_version = models.PositiveIntegerField(default=0)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']  # noqa: RUF012
     objects = UserManager()
+
+
+class PasswordResetToken(TimestampedModel):
+    """Model for storing password reset tokens."""
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
+    token = models.CharField(max_length=255, unique=True)
+    used = models.BooleanField(default=False)
+
+    def __str__(self) -> str:
+        return f"PasswordResetToken(user={self.user.email}, token={self.token}, used={self.used}), created_at={self.created_at})"

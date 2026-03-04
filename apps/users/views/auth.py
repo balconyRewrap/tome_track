@@ -1,7 +1,8 @@
+"""Authentication views for user registration, login, logout, and token refresh."""
 import logging
 
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -9,7 +10,11 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from apps.users.serializers import CustomTokenObtainPairSerializer, LogoutSerializer, RegisterSerializer
+from apps.users.serializers import (
+    CustomTokenObtainPairSerializer,
+    LogoutSerializer,
+    RegisterSerializer,
+)
 from apps.users.throttles import LoginThrottle, RegisterThrottle
 
 
@@ -30,7 +35,6 @@ from apps.users.throttles import LoginThrottle, RegisterThrottle
                 "email": "user@example.com",
                 "username": "user1",
                 "password": "StrongPass123",
-                "password_confirm": "StrongPass123",
             },
             request_only=True,
         ),
@@ -53,7 +57,12 @@ class RegisterView(GenericAPIView):
     throttle_classes = [RegisterThrottle]  # noqa: RUF012
     permission_classes = [AllowAny]  # noqa: RUF012
 
-    def post(self, request: Request, *args, **kwargs) -> Response:
+    def post(self, request: Request, *args, **kwargs) -> Response:  # noqa: ARG002, ANN002, ANN003
+        """Registers a new user with the provided email, username, password.
+
+        Returns:
+            Response: HTTP 201 with user info if successful, HTTP 400 if validation fails.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
@@ -135,7 +144,15 @@ class LogoutView(GenericAPIView):
     permission_classes = [IsAuthenticated]  # noqa: RUF012
     serializer_class = LogoutSerializer
 
-    def post(self, request: Request, *args, **kwargs) -> Response:
+    def post(self, request: Request, *args, **kwargs) -> Response:  # noqa: ARG002, ANN002, ANN003
+        """Logs out the user by blacklisting the provided refresh token.
+
+        Returns:
+            Response: HTTP 205 if successful, HTTP 400 if token is invalid.
+
+        Raises:
+            serializers.ValidationError: If the provided token is invalid.
+        """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         refresh_token = serializer.validated_data["refresh"]
@@ -143,10 +160,11 @@ class LogoutView(GenericAPIView):
             token = RefreshToken(refresh_token)
             token.blacklist()
             return Response(status=status.HTTP_205_RESET_CONTENT)
-        except Exception:
+        except Exception as e:
             logger = logging.getLogger(__name__)
             logger.exception("Error occurred while blacklisting refresh token")
-            return Response({"error": "Invalid token."}, status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({"refresh": "Invalid token."}) from e
+
 
 # Used only for tagging in API docs
 @extend_schema(
@@ -177,9 +195,7 @@ class LogoutView(GenericAPIView):
 class CustomTokenRefreshView(TokenRefreshView):  # noqa: D101
     pass
 
-
 # TODO: delete after testing whole authentification flow and token payload
-from rest_framework import serializers
 
 
 class AuthCheckSerializer(serializers.Serializer):
