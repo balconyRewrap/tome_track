@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements/requirements-dev.txt
 
+      - name: Create logs directory
+        run: mkdir -p logs
+
       - name: Run migrations
         run: python manage.py migrate
 
