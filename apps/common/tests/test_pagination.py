@@ -8,11 +8,11 @@ def test_standard_pagination_structure():
     factory = APIRequestFactory()
     request = factory.get('/fake-url/?page=1')
     paginator = StandardResultsSetPagination()
-    queryset = list(range(30))  # имитируем 30 объектов
+    queryset = list(range(30))
 
     paginated = paginator.paginate_queryset(queryset, Request(request))
     response = paginator.get_paginated_response(paginated).data
 
-    assert set(response.keys()) == {'count', 'next', 'previous', 'results'}
-    assert response['count'] == 30
-    assert isinstance(response['results'], list)
+    assert set(response.keys()) == {'count', 'next', 'previous', 'results'}  # pyright: ignore
+    assert response['count'] == 30  # pyright: ignore
+    assert isinstance(response['results'], list)  # pyright: ignore
