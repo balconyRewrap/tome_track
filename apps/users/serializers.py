@@ -11,6 +11,14 @@ from rest_framework_simplejwt.tokens import Token
 User = get_user_model()
 
 
+class AuthCheckSerializer(serializers.Serializer):
+    """Serializer for authentication check test endpoint."""
+
+    detail = serializers.CharField()
+    user_id = serializers.IntegerField()
+    email = serializers.EmailField()
+
+
 class RegisterSerializer(serializers.Serializer):
     """Serializer for user registration."""
 
@@ -89,6 +97,8 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     def validate(self, attrs):
         data = super().validate(attrs)
         # User has it, but pylance doesn't recognize it, so we ignore the type errors here
+        if not self.user.is_active:  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+            raise serializers.ValidationError("User account is disabled.")
         data["user_id"] = self.user.id  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
         data["email"] = self.user.email  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
         data["role"] = self.user.role  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
@@ -247,3 +257,12 @@ class PasswordChangeSerializer(serializers.Serializer):
         if not user.check_password(attrs['current_password']):
             raise serializers.ValidationError({"current_password": "Incorrect password."})
         return attrs
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    """Serializer for admin user management."""
+
+    class Meta:  # noqa: D106
+        model = User
+        fields = ['id', 'email', 'username', 'role', 'is_active', 'created_at']  # noqa: RUF012
+        read_only_fields = ['id', 'email', 'username', 'created_at']  # noqa: RUF012

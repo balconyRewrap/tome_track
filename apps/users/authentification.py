@@ -54,6 +54,6 @@ class TokenVersionJWTAuthentication(JWTAuthentication):
         """
         user = super().get_user(validated_token)
         token_version = validated_token.get("token_version")
-        if token_version is None or user.token_version != token_version:
+        if token_version is None or user.token_version != token_version or user.is_active is False:
             raise AuthenticationFailed("Token is no longer valid (token_version mismatch).")
         return user

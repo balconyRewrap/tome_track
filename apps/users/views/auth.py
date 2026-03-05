@@ -11,6 +11,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.users.serializers import (
+    AuthCheckSerializer,
     CustomTokenObtainPairSerializer,
     LogoutSerializer,
     RegisterSerializer,
@@ -195,20 +196,13 @@ class LogoutView(GenericAPIView):
 class CustomTokenRefreshView(TokenRefreshView):  # noqa: D101
     pass
 
-# TODO: delete after testing whole authentification flow and token payload
-
-
-class AuthCheckSerializer(serializers.Serializer):
-    detail = serializers.CharField()
-    user_id = serializers.IntegerField()
-    email = serializers.EmailField()
 
 @extend_schema(tags=['Authentication'])
 class AuthCheckView(GenericAPIView):  # noqa: D101
     permission_classes = [IsAuthenticated]  # noqa: RUF012
-    serializer_class = AuthCheckSerializer  # Добавьте это
+    serializer_class = AuthCheckSerializer
 
-    def get(self, request, *args, **kwargs):
+    def get(self, request, *args, **kwargs):  # noqa: ANN201, ANN001, ANN002, ANN003, ARG002, PLR6301, D102
         data = {
             "detail": "Authenticated",
             "user_id": request.user.id,
