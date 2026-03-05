@@ -84,6 +84,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 max-args = 67
 
+[tool.ruff.lint.per-file-ignores]
+# DRF overrides don't need to be documented again, they have default behaviour.
+"apps/users/permissions.py" = ["ANN001", "ANN201", "ARG002", "D102", "PLR6301"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

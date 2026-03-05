@@ -19,6 +19,9 @@ from django.contrib import admin
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
+from apps.users.views.admin import (
+    AdminUserViewSet,
+)
 from apps.users.views.auth import (
     AuthCheckView,
     CustomTokenObtainPairView,
@@ -45,9 +48,6 @@ urlpatterns += [
     path('api/v1/auth/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/auth/token/refresh/', CustomTokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/auth/logout/', LogoutView.as_view(), name='logout'),
-    # TODO: delete after whole testing
-    path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
-
 ]
 
 # user
@@ -59,12 +59,27 @@ urlpatterns += [
     path('api/v1/users/password/change/', PasswordChangeView.as_view(), name='password_change'),
 ]
 
+# admin
+urlpatterns += [
+    path('api/v1/admin/users/', AdminUserViewSet.as_view({'get': 'list'}), name='admin_users'),
+    path(
+        'api/v1/admin/users/<int:pk>/',
+        AdminUserViewSet.as_view({'get': 'retrieve', 'patch': 'update'}),
+        name='admin_user_detail',
+    ),
+]
+
+urlpatterns += [
+    path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
+]
+
 # debug
 if getattr(settings, 'DEBUG', False):
     urlpatterns += [
         path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
         path('api/v1/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
         path('api/v1/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
+
     ]
 
 
