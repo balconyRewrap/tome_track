@@ -74,6 +74,10 @@ CACHES = {
     },
 }
 
+BOOK_CACHE_TTL = 60 * 5  # Cache book details for 5 minutes
+AUTHOR_CACHE_TTL = 60 * 60  # Cache author details for 1 hour
+TAG_CACHE_TTL = 60 * 600 # Cache tag details for 10 hours
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
@@ -239,7 +243,9 @@ SPECTACULAR_SETTINGS = {
     'TITLE': 'Book & Comic Reading Progress Tracker API',
     'DESCRIPTION': 'API for tracking reading progress of books and comics.',
     'VERSION': '1.0.0',
-    # will be added more settings in the future
+    # Split request/response schemas so that read-only fields (id, created_at,
+    # updated_at …) are excluded from POST/PUT/PATCH request bodies in Swagger.
+    'COMPONENT_SPLIT_REQUEST': True,
 }
 
 # django admin
@@ -247,7 +253,7 @@ SPECTACULAR_SETTINGS = {
 ADMIN_SITE_HEADER = "Book Tracker Admin"
 ADMIN_SITE_TITLE = "Book Tracker Admin"
 ADMIN_INDEX_TITLE = "Book Tracker Administration"
-ALLOWED_ADMIN_IPS = ['127.0.0.1', '172.19.0.1']  # Add my local IP address here
+ALLOWED_ADMIN_IPS = ['127.0.0.1', '172.19.0.1', '172.18.0.1']  # Add my local IP address here
 
 # static
 STATIC_URL = 'static/'

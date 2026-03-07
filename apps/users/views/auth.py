@@ -208,4 +208,7 @@ class AuthCheckView(GenericAPIView):  # noqa: D101
             "user_id": request.user.id,
             "email": request.user.email,
         }
+        from django.core.cache import cache
+        client = cache.client.get_client()
+        print(list(client.keys('*')))
         return Response(data)
