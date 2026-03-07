@@ -1,5 +1,6 @@
 from typing import Final
 
+from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -60,8 +61,15 @@ class Book(TimestampedModel):
     chapters_total = models.PositiveIntegerField(null=True, blank=True)
     edition = models.CharField(max_length=255, blank=True)
     parent_book = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='editions')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='books',
+    )
 
-    class Meta:
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
         indexes = [  # noqa: RUF012
             GinIndex(fields=['title'], name='book_title_trgm', opclasses=['gin_trgm_ops']),
             GinIndex(fields=['title_en'], name='book_title_en_trgm', opclasses=['gin_trgm_ops']),

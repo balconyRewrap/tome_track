@@ -220,7 +220,7 @@ class PasswordResetView(GenericAPIView):
     """
 
     # TODO: make Any after implementing email sending
-    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    permission_classes = [IsAuthenticated]
     serializer_class = PasswordResetSerializer
 
     # TODO: change the post after implementing email sending to not return the token in response

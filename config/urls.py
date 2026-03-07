@@ -15,10 +15,16 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
+from apps.books.views import (
+    AuthorViewSet,
+    BookViewSet,
+    TagViewSet,
+)
 from apps.users.views.admin import (
     AdminUserViewSet,
 )
@@ -69,6 +75,40 @@ urlpatterns += [
     ),
 ]
 
+# books
+books = BookViewSet.as_view({
+    'get':    'list',
+    'post':   'create',
+})
+
+books_detail = BookViewSet.as_view({
+    'get':    'retrieve',
+    'put':    'update',
+    'patch':  'partial_update',
+    'delete': 'destroy',
+})
+urlpatterns += [
+    path('api/v1/books/', books, name='books'),
+    path('api/v1/books/<int:pk>/', books_detail, name='book_detail'),
+]
+
+authors = AuthorViewSet.as_view({'get': 'list', 'post': 'create'})
+authors_detail = AuthorViewSet.as_view({'get': 'retrieve'})
+
+urlpatterns += [
+    path('api/v1/authors/', authors, name='authors'),
+    path('api/v1/authors/<int:pk>/', authors_detail, name='author-detail'),
+]
+
+tags = TagViewSet.as_view({'get': 'list', 'post': 'create'})
+tags_detail = TagViewSet.as_view({'get': 'retrieve'})
+
+urlpatterns += [
+    path('api/v1/tags/', tags, name='tags'),
+    path('api/v1/tags/<int:pk>/', tags_detail, name='tag-detail'),
+]
+
+
 urlpatterns += [
     path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
 ]
@@ -85,3 +125,7 @@ if getattr(settings, 'DEBUG', False):
 
 handler404 = "apps.common.exceptions.custom_404"
 handler500 = "apps.common.exceptions.custom_500"
+
+# Serve uploaded media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

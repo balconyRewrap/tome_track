@@ -1,2 +1,1 @@
-from django.shortcuts import render
-
+"""Views for common, now is empty."""
