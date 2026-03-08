@@ -1,5 +1,6 @@
 """Authentication views for user registration, login, logout, and token refresh."""
 import logging
+from typing import Any
 
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
@@ -55,10 +56,10 @@ class RegisterView(GenericAPIView):
     """User registration endpoint."""
 
     serializer_class = RegisterSerializer
-    throttle_classes = [RegisterThrottle]  # noqa: RUF012
-    permission_classes = [AllowAny]  # noqa: RUF012
+    throttle_classes = [RegisterThrottle]
+    permission_classes = [AllowAny]
 
-    def post(self, request: Request, *args, **kwargs) -> Response:  # noqa: ARG002, ANN002, ANN003
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # noqa: ARG002
         """Registers a new user with the provided email, username, password.
 
         Returns:
@@ -111,7 +112,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     """Custom view for obtaining JWT tokens that uses a custom serializer to include user role in the token payload."""
 
     serializer_class = CustomTokenObtainPairSerializer
-    throttle_classes = [LoginThrottle]  # noqa: RUF012
+    throttle_classes = [LoginThrottle]
 
 
 @extend_schema(
@@ -142,10 +143,10 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 class LogoutView(GenericAPIView):
     """User logout endpoint that blacklists the refresh token."""
 
-    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    permission_classes = [IsAuthenticated]
     serializer_class = LogoutSerializer
 
-    def post(self, request: Request, *args, **kwargs) -> Response:  # noqa: ARG002, ANN002, ANN003
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # noqa: ARG002
         """Logs out the user by blacklisting the provided refresh token.
 
         Returns:
@@ -202,7 +203,7 @@ class AuthCheckView(GenericAPIView):  # noqa: D101
     permission_classes = [IsAuthenticated]
     serializer_class = AuthCheckSerializer
 
-    def get(self, request, *args, **kwargs):  # noqa: ANN201, ANN001, ANN002, ANN003, ARG002, PLR6301, D102
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # noqa: PLR6301, D102, ARG002
         data = {
             "detail": "Authenticated",
             "user_id": request.user.id,

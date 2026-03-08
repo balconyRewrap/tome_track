@@ -23,8 +23,8 @@ class ActionPermissionsMixin:
         Returns:
             list: List of permission instances.
         """
-        if hasattr(self, 'action') and self.action in self.permission_classes_by_action:
-            classes = self.permission_classes_by_action[self.action]
+        if hasattr(self, 'action') and self.action in self.permission_classes_by_action:  # pyright: ignore[reportAttributeAccessIssue]
+            classes = self.permission_classes_by_action[self.action]  # pyright: ignore[reportAttributeAccessIssue]
         else:
             classes = getattr(self, 'permission_classes', [])
         return [cls() for cls in classes]

@@ -26,6 +26,7 @@ from apps.books.views import (
     TagViewSet,
 )
 from apps.common.views import GetCacheView
+from apps.userbooks.views import UserBookViewSet
 from apps.users.views.admin import (
     AdminUserViewSet,
 )
@@ -111,6 +112,21 @@ tags_detail = TagViewSet.as_view({'get': 'retrieve'})
 urlpatterns += [
     path('api/v1/tags/', tags, name='tags'),
     path('api/v1/tags/<int:pk>/', tags_detail, name='tag-detail'),
+]
+
+# userbooks
+userbooks = UserBookViewSet.as_view({
+    'get': 'list',
+    'post': 'create',
+})
+userbooks_detail = UserBookViewSet.as_view({
+    'get': 'retrieve',
+    'patch': 'partial_update',
+    'delete': 'destroy',
+})
+urlpatterns += [
+    path('api/v1/userbooks/', userbooks, name='userbooks'),
+    path('api/v1/userbooks/<int:pk>/', userbooks_detail, name='userbook-detail'),
 ]
 
 # testing views:

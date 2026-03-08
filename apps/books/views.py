@@ -1,6 +1,7 @@
 """Views for the books app."""
 import hashlib
 import json
+from typing import Any
 
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
@@ -33,6 +34,12 @@ BOOKS_CACHE_PREFIX = 'books'
 AUTHOR_CACHE_PREFIX = 'authors'
 TAG_CACHE_PREFIX = 'tags'
 SEARCH_CACHE_PREFIX = 'search'
+
+BOOKS_CACHE_TTL = getattr(settings, 'BOOKS_CACHE_TTL', 60 * 5)  # 5 minutes
+BOOKS_DETAIL_CACHE_TTL = getattr(settings, 'BOOKS_DETAIL_CACHE_TTL', 60 * 10)  # 10 min
+AUTHOR_CACHE_TTL = getattr(settings, 'AUTHOR_CACHE_TTL', 60 * 60)  # 1 hour
+TAG_CACHE_TTL = getattr(settings, 'TAG_CACHE_TTL', 60 * 60)  # 1 hour
+SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
 
 
 @extend_schema_view(
@@ -157,8 +164,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         # BookSerializer, even though it clearly is. So we ignore the type check here.
         return BookSerializer  # pyright: ignore[reportReturnType]
 
-    @method_decorator(cache_page(settings.BOOKS_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
-    def list(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
+    @method_decorator(cache_page(BOOKS_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """List books. Public endpoint, cached.
 
         Returns:
@@ -166,8 +173,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(settings.BOOKS_DETAIL_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
-    def retrieve(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
+    @method_decorator(cache_page(BOOKS_DETAIL_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Retrieve a book by ID. Public endpoint, cached.
 
         Returns:
@@ -192,7 +199,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         responses={200: BookSerializer(many=True)},
         tags=['Books'],
     )
-    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['get'])
     def search(self, request: Request) -> Response:
         """Search books by title (trigram) with optional filters. Public, cached.
 
@@ -232,31 +239,33 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if page is not None:
             serializer = BookSerializer(page, many=True, context={'request': request})
             result = self.get_paginated_response(serializer.data)
-            cache.set(cache_key, result.data, settings.SEARCH_CACHE_TTL)
+            cache.set(cache_key, result.data, SEARCH_CACHE_TTL)
             return result
 
         serializer = BookSerializer(qs, many=True, context={'request': request})
         data = serializer.data
-        cache.set(cache_key, data, settings.SEARCH_CACHE_TTL)
+        cache.set(cache_key, data, SEARCH_CACHE_TTL)
         return Response(data)
 
     def perform_create(self, serializer: BookSerializer) -> None:
         """Create a book. Invalidate books and search cache."""
         serializer.save(user=self.request.user)
-        invalidate_cache_prefix(BOOKS_CACHE_PREFIX)
-        invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
+        self._invalidate_book_cache()
 
-    def perform_update(self, serializer: BookSerializer) -> None:  # noqa: PLR6301
+    def perform_update(self, serializer: BookSerializer) -> None:
         """Update a book. Invalidate books and search cache."""
         serializer.save()
-        invalidate_cache_prefix(BOOKS_CACHE_PREFIX)
-        invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
+        self._invalidate_book_cache()
 
-    def perform_destroy(self, instance) -> None:  # noqa: ANN001
+    def perform_destroy(self, instance: Book) -> None:
         """Destroy a book. Invalidate books and search cache."""
+        self._invalidate_book_cache()
+        return super().perform_destroy(instance)
+
+    def _invalidate_book_cache(self) -> None:  # noqa: PLR6301
+        """Helper to invalidate books cache."""
         invalidate_cache_prefix(BOOKS_CACHE_PREFIX)
         invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
-        return super().perform_destroy(instance)
 
 
 @extend_schema(tags=['Authors'])
@@ -276,7 +285,7 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         'destroy': [IsAdminRole],
     }
 
-    @method_decorator(cache_page(settings.AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX), name='dispatch')
+    @method_decorator(cache_page(AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX), name='dispatch')
     def list(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """List authors. Public endpoint, cached.
 
@@ -285,7 +294,7 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(settings.AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX), name='dispatch')
+    @method_decorator(cache_page(AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX), name='dispatch')
     def retrieve(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """Retrieve an author by ID. Public endpoint, cached.
 
@@ -322,7 +331,7 @@ class TagViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         'destroy': [IsAdminRole],
     }
 
-    @method_decorator(cache_page(settings.AUTHOR_CACHE_TTL, key_prefix=TAG_CACHE_PREFIX), name='dispatch')
+    @method_decorator(cache_page(TAG_CACHE_TTL, key_prefix=TAG_CACHE_PREFIX), name='dispatch')
     def list(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """List tags. Public endpoint, cached.
 
@@ -331,7 +340,7 @@ class TagViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(settings.AUTHOR_CACHE_TTL, key_prefix=TAG_CACHE_PREFIX), name='dispatch')
+    @method_decorator(cache_page(TAG_CACHE_TTL, key_prefix=TAG_CACHE_PREFIX), name='dispatch')
     def retrieve(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """Retrieve a tag by ID. Public endpoint, cached.
 

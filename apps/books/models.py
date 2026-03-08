@@ -44,7 +44,12 @@ class Tag(TimestampedModel):
 
 
 class BookType(models.TextChoices):
-    """Available types for a book."""
+    """Available types for a book.
+
+    Fields:
+        BOOK: A regular book.
+        COMIC: A comic book.
+    """
 
     BOOK = 'book', 'Book'
     COMIC = 'comic', 'Comic'

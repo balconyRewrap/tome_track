@@ -1,5 +1,6 @@
 """Views for user profile and password reset."""
 import uuid
+from typing import Any
 
 from django.contrib.auth.models import AbstractUser, AnonymousUser
 from django.utils import timezone
@@ -71,7 +72,7 @@ class UserMeView(generics.RetrieveUpdateAPIView):
             ),
         ],
     )
-    def get(self, request, *args, **kwargs) -> Response:  # noqa: ANN001, ANN002, ANN003
+    def get(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Get the profile information of the authenticated user. Used for adding OpenAPI schema.
 
         Returns:
@@ -117,7 +118,7 @@ class UserMeView(generics.RetrieveUpdateAPIView):
             ),
         ],
     )
-    def patch(self, request, *args, **kwargs) -> Response:  # noqa: ANN003, ANN002, ANN001
+    def patch(self, request: Request, *args: Any, **kwargs: Any) -> Response:
         """Method is overriden just to add OpenAPI schema.
 
         Returns:
@@ -373,7 +374,7 @@ class PasswordChangeView(GenericAPIView):
 
         Returns:
             Response:
-                A response with status 200 OK if the password was changed successfully, 
+                A response with status 200 OK if the password was changed successfully,
                 or 400 Bad Request if validation failed.
         """
         serializer = self.get_serializer(data=request.data)

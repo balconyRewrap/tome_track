@@ -12,6 +12,7 @@ dependencies = [
     "django-redis>=6.0.0",
     "djangorestframework>=3.16.1",
     "djangorestframework-simplejwt>=5.5.1",
+    "drf-extensions>=0.7.1",
     "drf-spectacular>=0.29.0",
     "factory-boy>=3.3.3",
     "faker>=40.5.1",
@@ -67,7 +68,8 @@ target-version = "py312"
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
 select = ["ALL"]
-ignore = ["D203", "D213", "D401", "D413", "CPY001", "DOC502", "EM101", "EM102", "TRY003", "PERF401", "DTZ011", "RUF001", "Q000", "TD002", "TD003", "RUF012"]
+# ANN401 is ignored, because i don't use Any if doesn't needed realy, for example, for args, kwargs in DRF views
+ignore = ["D203", "D213", "D401", "D413", "CPY001", "DOC502", "EM101", "EM102", "TRY003", "PERF401", "DTZ011", "RUF001", "Q000", "TD002", "TD003", "RUF012", "ANN401"]
 external = ["WPS", "ASYNC", "VNE", "FNE", "C", "H", "DUO", "E"]
 preview = true
 

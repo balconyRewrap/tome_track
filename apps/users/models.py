@@ -17,7 +17,7 @@ class UserRole(models.TextChoices):
 class UserManager(BaseUserManager):
     """Custom user manager for the User model."""
 
-    def create_user(self, email: str, username: str, password: str, **extra_fields: Any) -> "User":  # noqa: ANN401
+    def create_user(self, email: str, username: str, password: str, **extra_fields: Any) -> "User":
         """Creates and saves a User with the given email, username, and password.
 
         Args:
@@ -44,7 +44,7 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email: str, username: str, password: str, **extra_fields: Any) -> "User":  # noqa: ANN401
+    def create_superuser(self, email: str, username: str, password: str, **extra_fields: Any) -> "User":
         """Creates and saves a superuser with the given email, username, and password.
 
         Args:
@@ -86,7 +86,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     token_version = models.PositiveIntegerField(default=0)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username']  # noqa: RUF012
+    REQUIRED_FIELDS = ['username']
     objects = UserManager()
 
 
@@ -98,4 +98,12 @@ class PasswordResetToken(TimestampedModel):
     used = models.BooleanField(default=False)
 
     def __str__(self) -> str:
-        return f"PasswordResetToken(user={self.user.email}, token={self.token}, used={self.used}), created_at={self.created_at})"
+        """String representation of the PasswordResetToken.
+
+        Returns:
+            str: A string representation of the PasswordResetToken instance.
+        """
+        return (
+            f"PasswordResetToken(user={self.user.email}, token={self.token}, "
+            f"used={self.used}, created_at={self.created_at})"
+        )
