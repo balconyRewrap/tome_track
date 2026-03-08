@@ -5,6 +5,7 @@ from typing import Any
 from django.conf import settings
 from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -16,7 +17,7 @@ from apps.common.mixins import ActionPermissionsMixin
 from apps.common.permissions import IsOwnerOrAdmin
 from apps.userbooks.filters import UserBookFilter
 from apps.userbooks.models import UserBook
-from apps.userbooks.serializers import UserBookSerializer, UserBookWriteSerializer
+from apps.userbooks.serializers import UserBookSerializer, UserBookUpdateSerializer, UserBookWriteSerializer
 
 USERBOOKS_CACHE_TTL = getattr(settings, 'USERBOOKS_CACHE_TTL', 60 * 60)
 USERBOOKS_DETAIL_CACHE_TTL = getattr(settings, 'USERBOOKS_DETAIL_CACHE_TTL', 60 * 120)
@@ -45,6 +46,59 @@ def userbook_cache_key(
     return f"userbooks_user_{request.user.pk}_{view_method.__name__}"
 
 
+@extend_schema_view(
+    list=extend_schema(
+        summary='List user books',
+        description='Returns a paginated list of the current user\'s books. Cached per user.',
+        responses={200: UserBookSerializer(many=True)},
+        tags=['UserBooks'],
+    ),
+    retrieve=extend_schema(
+        summary='Retrieve a user book',
+        description='Returns details of a single UserBook by ID. Requires ownership or admin role.',
+        responses={
+            200: UserBookSerializer,
+            404: OpenApiResponse(description='UserBook not found.'),
+        },
+        tags=['UserBooks'],
+    ),
+    create=extend_schema(
+        summary='Add a book to user list',
+        description='Creates a new UserBook entry for the current user.',
+        request=UserBookWriteSerializer,
+        responses={
+            201: UserBookWriteSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+        },
+        tags=['UserBooks'],
+    ),
+    update=extend_schema(exclude=True),
+    partial_update=extend_schema(
+        summary='Update a user book',
+        description='Partially updates a UserBook entry. The book field cannot be changed.',
+        request=UserBookUpdateSerializer,
+        responses={
+            200: UserBookUpdateSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+            403: OpenApiResponse(description='You do not have permission to perform this action.'),
+            404: OpenApiResponse(description='UserBook not found.'),
+        },
+        tags=['UserBooks'],
+    ),
+    destroy=extend_schema(
+        summary='Delete a user book',
+        description='Removes a UserBook entry. Requires ownership or admin role.',
+        responses={
+            204: OpenApiResponse(description='UserBook deleted successfully.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+            403: OpenApiResponse(description='You do not have permission to perform this action.'),
+            404: OpenApiResponse(description='UserBook not found.'),
+        },
+        tags=['UserBooks'],
+    ),
+)
 class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """ViewSet for managing UserBook relationships."""
 
@@ -70,9 +124,11 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         Returns:
             serializer (UserBookSerializer)
         """
-        if self.action in {'create', 'partial_update'}:
+        if self.action == 'create':
             # check apps/books/views.py for these ignores.
             return UserBookWriteSerializer  # pyright: ignore[reportReturnType]
+        if self.action == 'partial_update':
+            return UserBookUpdateSerializer  # pyright: ignore[reportReturnType]
         return UserBookSerializer  # pyright: ignore[reportReturnType]
 
     # queryset isn't Never by default, pyright is wrong.
