@@ -197,9 +197,9 @@ class CustomTokenRefreshView(TokenRefreshView):  # noqa: D101
     pass
 
 
-@extend_schema(tags=['Authentication'])
+@extend_schema(tags=['Authentication', 'Testing'])
 class AuthCheckView(GenericAPIView):  # noqa: D101
-    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    permission_classes = [IsAuthenticated]
     serializer_class = AuthCheckSerializer
 
     def get(self, request, *args, **kwargs):  # noqa: ANN201, ANN001, ANN002, ANN003, ARG002, PLR6301, D102
@@ -208,7 +208,4 @@ class AuthCheckView(GenericAPIView):  # noqa: D101
             "user_id": request.user.id,
             "email": request.user.email,
         }
-        from django.core.cache import cache
-        client = cache.client.get_client()
-        print(list(client.keys('*')))
         return Response(data)
