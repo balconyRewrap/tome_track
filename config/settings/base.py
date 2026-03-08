@@ -64,6 +64,8 @@ MIDDLEWARE = [
     'apps.common.middleware.AdminIPRestrictionMiddleware',  # place it after authentication middleware
 ]
 
+# Cache
+
 CACHES = {
     "default": {
         "BACKEND": "django_redis.cache.RedisCache",
@@ -79,6 +81,8 @@ SEARCH_CACHE_TTL = 60 * 3  # Cache search results for 3 minutes
 BOOKS_DETAIL_CACHE_TTL = 60 * 10  # Cache book details for 10 minutes
 AUTHOR_CACHE_TTL = 60 * 60  # Cache author details for 1 hour
 TAG_CACHE_TTL = 60 * 600  # Cache tag details for 10 hours
+USERBOOKS_CACHE_TTL = 60 * 60  # Cache userbooks list for 1 hour
+USERBOOKS_DETAIL_CACHE_TTL = 60 * 120  # Cache userbook details
 
 ROOT_URLCONF = 'config.urls'
 

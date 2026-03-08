@@ -8,7 +8,14 @@ from apps.common.models import TimestampedModel
 
 
 class ReadingStatus(models.TextChoices):
-    """Available reading statuses for a UserBook."""
+    """Available reading statuses for a UserBook.
+    
+    Fields:
+        READING: The user is currently reading the book.
+        COMPLETED: The user has completed reading the book.
+        DROPPED: The user has dropped the book.
+        PLAN_TO_READ: The user plans to read the book in the future.
+    """
 
     READING = 'reading', 'Reading'
     COMPLETED = 'completed', 'Completed'
@@ -26,7 +33,7 @@ class UserBook(TimestampedModel):
     current_chapter = models.PositiveIntegerField(null=True, blank=True)
     is_masterpiece = models.BooleanField(default=False)
     rating = models.DecimalField(
-        max_digits=3,
+        max_digits=3,  # 10.0, 9.5, etc.
         decimal_places=1,
         null=True,
         blank=True,
@@ -34,16 +41,19 @@ class UserBook(TimestampedModel):
     )
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
+        """Meta class for UserBook model."""
         unique_together = [['user', 'book']]
-        indexes = [  # noqa: RUF012
+        indexes = [
             models.Index(fields=['user', 'status']),
             models.Index(fields=['book']),
         ]
 
     def __str__(self) -> str:
         """Return a string representation of the UserBook.
-        
+
         Returns:
             str: the string of object.
         """
         return f'{self.user} — {self.book} ({self.status})'
+
+        

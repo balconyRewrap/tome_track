@@ -8,6 +8,8 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import Token
 
+from apps.users.models import User as UserModel
+
 User = get_user_model()
 
 
@@ -87,14 +89,24 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Custom serializer for obtaining JWT tokens that includes the user's role in the token payload."""
 
     @classmethod
-    def get_token(cls, user) -> Token:
+    def get_token(cls, user) -> Token:  # noqa: ANN401
+        """Get JWT token.
+
+        Returns:
+            token (Token): JWT token of user.
+        """
         token = super().get_token(user)
         # custom claims will be added later if needed
         token["token_version"] = user.token_version
         token["role"] = user.role
         return token
 
-    def validate(self, attrs):
+    def validate(self, attrs: dict) -> dict:
+        """Validate serializer data.
+        
+        Returns:
+            dict: validated attributes.
+        """
         data = super().validate(attrs)
         # User has it, but pylance doesn't recognize it, so we ignore the type errors here
         if not self.user.is_active:  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
@@ -115,9 +127,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile."""
 
     class Meta:
+        """Meta class for UserProfileSerializer."""
+
         model = User
-        fields = ['id', 'email', 'username', 'role']  # noqa: RUF012
-        read_only_fields = ['id', 'email', 'role']  # noqa: RUF012
+        fields = ['id', 'email', 'username', 'role']
+        read_only_fields = ['id', 'email', 'role']
 
     def validate_username(self, value: str) -> str:
         """Validate that the username is unique.
@@ -264,5 +278,5 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     class Meta:  # noqa: D106
         model = User
-        fields = ['id', 'email', 'username', 'role', 'is_active', 'created_at']  # noqa: RUF012
-        read_only_fields = ['id', 'email', 'username', 'created_at']  # noqa: RUF012
+        fields = ['id', 'email', 'username', 'role', 'is_active', 'created_at']
+        read_only_fields = ['id', 'email', 'username', 'created_at']
