@@ -11,6 +11,8 @@ class UserBookFilter(filters.FilterSet):
     status = filters.ChoiceFilter(choices=ReadingStatus.choices)
     type = filters.ChoiceFilter(field_name='book__book_type', choices=BookType.choices)
 
-    class Meta:  # noqa: D106
+    class Meta:
+        """Meta class for UserBookFilter."""
+
         model = UserBook
         fields = ['status', 'type']

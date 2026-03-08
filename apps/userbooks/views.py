@@ -1,48 +1,55 @@
+"""Views for UserBook model, including caching and permissions."""
+from collections.abc import Callable
 from typing import Any
 
 from django.conf import settings
-from django.contrib.postgres.search import TrigramSimilarity
-from django.core.cache import cache
-from django.db.models import Avg, Count, Q, QuerySet
-from django.db.models.functions import Greatest
-from django.shortcuts import render
-from django.utils.decorators import method_decorator
-from django.views.decorators.cache import cache_page
+from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework_extensions.cache.decorators import cache_response
-from apps.books.filters import BookFilter
-from apps.books.models import Author, Book, Tag
-from apps.books.serializers import (
-    AuthorSerializer,
-    BookSerializer,
-    BookWriteSerializer,
-    TagSerializer,
-)
-from apps.common.cache_utils import invalidate_cache_by_key_prefix, invalidate_cache_prefix
-from apps.common.mixins import ActionPermissionsMixin
-from apps.common.permissions import IsAdminRole, IsOwnerOrAdmin
-from apps.userbooks.filters import UserBookFilter
-from apps.userbooks.models import ReadingStatus, UserBook
-from apps.userbooks.serializers import UserBookSerializer, UserBookWriteSerializer
 
-USERBOOKS_CACHE_KEY_PREFIX = 'userbooks_list_user_'
+from apps.common.cache_utils import invalidate_cache_by_key_prefix
+from apps.common.mixins import ActionPermissionsMixin
+from apps.common.permissions import IsOwnerOrAdmin
+from apps.userbooks.filters import UserBookFilter
+from apps.userbooks.models import UserBook
+from apps.userbooks.serializers import UserBookSerializer, UserBookWriteSerializer
 
 USERBOOKS_CACHE_TTL = getattr(settings, 'USERBOOKS_CACHE_TTL', 60 * 60)
 USERBOOKS_DETAIL_CACHE_TTL = getattr(settings, 'USERBOOKS_DETAIL_CACHE_TTL', 60 * 120)
+
+# books cache won't be invalidated when userbook with rating created, updated or deleted
+# because TTL of book already small, so calculating average rating on the fly is not a problem.
+# But userbooks cache should be invalidated immediately when userbook is created, updated or deleted,
+# so we can set shorter TTL for userbooks cache.
+# Also, book cache can be shared among all users, so we can set longer TTL for books cache.
+# But userbooks cache is per-user, so it should be invalidated immediately when userbook is created, updated or deleted,
+# so we can set shorter TTL for userbooks cache.  Also, book cache can be shared among all users,
+
+
+def userbook_cache_key(
+    view_instance: "UserBookViewSet",  # noqa: ARG001
+    view_method: Callable,
+    request: Request,
+    *args: Any,  # noqa: ARG001
+    **kwargs: Any,  # noqa: ARG001
+) -> str:
+    """Return a cache key for userbooks list and detail views, based on user ID and view method.
+
+    Returns:
+        str: The cache key for the userbooks list or detail view.
+    """
+    return f"userbooks_user_{request.user.pk}_{view_method.__name__}"
 
 
 class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """ViewSet for managing UserBook relationships."""
 
     http_method_names = ['get', 'post', 'patch', 'delete']
-    queryset = UserBook.objects.select_related('book', 'user').all()
+    queryset = UserBook.objects.select_related('book', 'user').all().order_by('id')
     serializer_class = UserBookSerializer
     filter_backends = [DjangoFilterBackend]
     filterset_class = UserBookFilter
@@ -81,10 +88,12 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if self.request.user.is_staff:
             return UserBook.objects.all()
 
-        return UserBook.objects.filter(user=self.request.user)
+        return UserBook.objects.filter(user=self.request.user).order_by('id')
 
-    @method_decorator(cache_page(settings.USERBOOKS_CACHE_TTL, key_prefix=USERBOOKS_CACHE_KEY_PREFIX))
-    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    # pyright is ignored, because cache_response decorator changes the signature of the method
+    # but we know that it will still return Response.
+    @cache_response(timeout=USERBOOKS_CACHE_TTL, key_func=userbook_cache_key)
+    def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # pyright: ignore[reportIncompatibleMethodOverride]
         """List UserBook objects for the current user, cached.
 
         Returns:
@@ -92,8 +101,8 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(settings.USERBOOKS_DETAIL_CACHE_TTL, key_prefix=USERBOOKS_CACHE_KEY_PREFIX))
-    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+    @cache_response(timeout=USERBOOKS_CACHE_TTL, key_func=userbook_cache_key)
+    def retrieve(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # pyright: ignore[reportIncompatibleMethodOverride]
         """Retrieve a UserBook object by ID, cached.
 
         Returns:
@@ -102,7 +111,12 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         return super().retrieve(request, *args, **kwargs)
 
     def perform_create(self, serializer: UserBookSerializer) -> None:
-        """Override perform_create to set the user and invalidate cache."""
+        """Override perform_create to set the user and invalidate cache.
+
+        After the object is saved we need to know whether it contains a
+        ``rating`` so that book-level cache can be invalidated.  ``rating`` is
+        always available on the returned instance, so inspect it directly.
+        """
         serializer.save(user=self.request.user)
         self._invalidate_userbooks_cache()
 
@@ -116,6 +130,6 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         self._invalidate_userbooks_cache()
         return super().perform_destroy(instance)
 
-    def _invalidate_userbooks_cache(self) -> None:  # noqa: PLR6301
+    def _invalidate_userbooks_cache(self) -> None:
         """Helper to invalidate userbooks cache."""
-        invalidate_cache_prefix(USERBOOKS_CACHE_KEY_PREFIX)
+        invalidate_cache_by_key_prefix(f'userbooks_user_{self.request.user.pk}_')

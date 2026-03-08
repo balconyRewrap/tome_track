@@ -28,8 +28,6 @@ class UserBookSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'id': {'read_only': True},
             'user': {'read_only': True},
-            # 'book': {'required': True},
-            # 'status': {'required': True},
 
             'created_at': {'read_only': True},
             'updated_at': {'read_only': True},
@@ -60,14 +58,23 @@ class UserBookWriteSerializer(UserBookSerializer):
         """
         is_masterpiece = attrs.get('is_masterpiece', False)
         status = attrs.get('status')
-        current_chapter = attrs.get('current_chapter')
         current_page = attrs.get('current_page')
         book = attrs.get('book')
         rating = attrs.get('rating')
+        if self.partial and 'book' in attrs:
+            raise serializers.ValidationError(
+                'Book cannot be changed.',
+            )
         if not self.partial and not book:
             raise serializers.ValidationError(
                 'Book is required.',
             )
+        if not self.partial and book:
+            user = self.context['request'].user
+            if UserBook.objects.filter(user=user, book=book).exists():
+                raise serializers.ValidationError(
+                    'You already have this book in your list.',
+                )
         if is_masterpiece and status != ReadingStatus.COMPLETED:
             raise serializers.ValidationError(
                 'A book can be masterpiece only if status is completed.',
@@ -75,11 +82,6 @@ class UserBookWriteSerializer(UserBookSerializer):
         if current_page and book and book.book_type != BookType.BOOK:
             raise serializers.ValidationError(
                 'Current page can be set only for books of type "book".',
-            )
-
-        if current_chapter and book and book.book_type != BookType.COMIC:
-            raise serializers.ValidationError(
-                'Current chapter can be set only for books of type "comic".',
             )
 
         if current_page and book and book.pages_total and current_page > book.pages_total:

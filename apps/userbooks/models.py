@@ -9,7 +9,7 @@ from apps.common.models import TimestampedModel
 
 class ReadingStatus(models.TextChoices):
     """Available reading statuses for a UserBook.
-    
+
     Fields:
         READING: The user is currently reading the book.
         COMPLETED: The user has completed reading the book.
@@ -42,6 +42,7 @@ class UserBook(TimestampedModel):
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
         """Meta class for UserBook model."""
+
         unique_together = [['user', 'book']]
         indexes = [
             models.Index(fields=['user', 'status']),
@@ -55,5 +56,3 @@ class UserBook(TimestampedModel):
             str: the string of object.
         """
         return f'{self.user} — {self.book} ({self.status})'
-
-        

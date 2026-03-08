@@ -74,3 +74,5 @@ typing-extensions==4.15.0
     #   referencing
 uritemplate==4.2.0
     # via drf-spectacular
+drf-extensions==0.7.1
+    # via tome track (pyproject.toml)
