@@ -13,7 +13,7 @@ from apps.books.models import Author, Book, Tag
 from apps.books.serializers import (
     AuthorSerializer,
     BookSerializer,
-    BookUpdateSerializer,
+    # BookUpdateSerializer,
     BookWriteSerializer,
     TagSerializer,
 )
@@ -140,10 +140,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         Returns:
             serializer (BookSerializer)
         """
-        if self.action in {'create', 'update'}:
+        if self.action in {'create', 'update', 'partial_update'}:
             return BookWriteSerializer  # pyright: ignore[reportReturnType]
-        if self.action == 'partitial_update':
-            return BookUpdateSerializer  # pyright: ignore[reportReturnType]
 
         # pyright somehow complains that the return type is not compatible with the declared return type of
         # BookSerializer, even though it clearly is. So we ignore the type check here.

@@ -11,6 +11,7 @@ from apps.common.validators import validate_cover_image
 AUTHOR_MAX_COUNT: Final[int] = 10
 TAG_MAX_COUNT: Final[int] = 20
 
+
 # now nothing more than name and timestamp fields is usable now, but we can easily add more fields later if needed
 class Author(TimestampedModel):
     """Model representing an author of books."""
