@@ -32,7 +32,7 @@ from apps.users.throttles import PasswordResetThrottle
 class UserMeView(generics.RetrieveUpdateAPIView):
     """Endpoint for retrieving the authenticated user's profile information."""
 
-    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    permission_classes = [IsAuthenticated]
     serializer_class = UserProfileSerializer
 
     # Override PUT method to return 405. Doesn't make anything else
@@ -164,7 +164,7 @@ class UserMeView(generics.RetrieveUpdateAPIView):
 class ChangeEmailView(GenericAPIView):
     """Endpoint for changing the authenticated user's email."""
 
-    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    permission_classes = [IsAuthenticated]
     serializer_class = ChangeEmailSerializer
 
     def post(self, request: Request) -> Response:
@@ -283,9 +283,9 @@ class PasswordResetConfirmView(GenericAPIView):
     password is updated.
     """
 
-    permission_classes = [AllowAny]  # noqa: RUF012
+    permission_classes = [AllowAny]
     serializer_class = PasswordResetConfirmSerializer
-    throttle_classes = [PasswordResetThrottle]  # noqa: RUF012
+    throttle_classes = [PasswordResetThrottle]
 
     def post(self, request: Request) -> Response:
         """Post method for confirming a password reset.
@@ -331,14 +331,16 @@ class PasswordResetConfirmView(GenericAPIView):
 
 @extend_schema(
     summary="Change user password",
-    description="Endpoint for changing the authenticated user's password. Requires the current password for verification.",
+    description="Endpoint for changing the authenticated user's password. "
+    "Requires the current password for verification.",
     request=PasswordChangeSerializer,
     responses={
         200: OpenApiResponse(
             response=PasswordChangeSerializer,
             description="Password updated successfully.",
         ),
-        400: OpenApiResponse(description="Validation error. Incorrect current password or new password validation failed."),
+        400: OpenApiResponse(
+            description="Validation error. Incorrect current password or new password validation failed."),
         401: OpenApiResponse(description="Authentication credentials were not provided or Token is no longer valid."),
     },
     examples=[
@@ -363,7 +365,7 @@ class PasswordResetConfirmView(GenericAPIView):
 class PasswordChangeView(GenericAPIView):
     """Endpoint for changing the authenticated user's password."""
 
-    permission_classes = [IsAuthenticated]  # noqa: RUF012
+    permission_classes = [IsAuthenticated]
     serializer_class = PasswordChangeSerializer
 
     def post(self, request: Request) -> Response:

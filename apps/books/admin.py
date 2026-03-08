@@ -1,3 +1,4 @@
+"""Admin configuration for the books app."""
 from django.contrib import admin
 
 from .models import Author, Book, Tag

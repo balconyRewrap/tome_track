@@ -67,7 +67,7 @@ target-version = "py312"
 # Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
 # McCabe complexity (`C901`) by default.
 select = ["ALL"]
-ignore = ["D401", "D413", "CPY001", "DOC502", "EM101", "EM102", "TRY003", "PERF401", "DTZ011", "RUF001", "Q000", "TD002", "TD003", "RUF012"]
+ignore = ["D203", "D213", "D401", "D413", "CPY001", "DOC502", "EM101", "EM102", "TRY003", "PERF401", "DTZ011", "RUF001", "Q000", "TD002", "TD003", "RUF012"]
 external = ["WPS", "ASYNC", "VNE", "FNE", "C", "H", "DUO", "E"]
 preview = true
 
@@ -87,6 +87,8 @@ max-args = 67
 [tool.ruff.lint.per-file-ignores]
 # DRF overrides don't need to be documented again, they have default behaviour.
 "apps/users/permissions.py" = ["ANN001", "ANN201", "ARG002", "D102", "PLR6301"]
+# migrations are auto generated
+"*/migrations/*.py" = ["ALL"]
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.

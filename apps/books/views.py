@@ -1,29 +1,38 @@
 """Views for the books app."""
+import hashlib
+import json
+
 from django.conf import settings
+from django.contrib.postgres.search import TrigramSimilarity
+from django.core.cache import cache
 from django.db.models import Avg, Count, Q
+from django.db.models.functions import Greatest
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
-from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema, extend_schema_view
+from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
+from rest_framework.response import Response
 
+from apps.books.filters import BookFilter
 from apps.books.models import Author, Book, Tag
 from apps.books.serializers import (
     AuthorSerializer,
     BookSerializer,
-    # BookUpdateSerializer,
     BookWriteSerializer,
     TagSerializer,
 )
+from apps.common.cache_utils import invalidate_cache_by_key_prefix, invalidate_cache_prefix
 from apps.common.mixins import ActionPermissionsMixin
 from apps.common.permissions import IsAdminRole, IsOwnerOrAdmin
-from apps.common.utils import invalidate_cache_prefix
 
 BOOKS_CACHE_PREFIX = 'books'
 AUTHOR_CACHE_PREFIX = 'authors'
 TAG_CACHE_PREFIX = 'tags'
+SEARCH_CACHE_PREFIX = 'search'
 
 
 @extend_schema_view(
@@ -45,9 +54,9 @@ TAG_CACHE_PREFIX = 'tags'
     create=extend_schema(
         summary='Create a book',
         description='Creates a new book. Requires authentication.',
-        request=BookSerializer,
+        request=BookWriteSerializer,
         responses={
-            201: BookSerializer,
+            201: BookWriteSerializer,
             400: OpenApiResponse(description='Validation error.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
         },
@@ -72,9 +81,9 @@ TAG_CACHE_PREFIX = 'tags'
     update=extend_schema(
         summary='Update a book',
         description='Fully replaces a book. Requires ownership or admin role.',
-        request=BookSerializer,
+        request=BookWriteSerializer,
         responses={
-            200: BookSerializer,
+            200: BookWriteSerializer,
             400: OpenApiResponse(description='Validation error.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
             403: OpenApiResponse(description='You do not have permission to perform this action.'),
@@ -85,9 +94,9 @@ TAG_CACHE_PREFIX = 'tags'
     partial_update=extend_schema(
         summary='Partially update a book',
         description='Updates one or more fields of a book. Requires ownership or admin role.',
-        request=BookSerializer,
+        request=BookWriteSerializer,
         responses={
-            200: BookSerializer,
+            200: BookWriteSerializer,
             400: OpenApiResponse(description='Validation error.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
             403: OpenApiResponse(description='You do not have permission to perform this action.'),
@@ -126,6 +135,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     permission_classes_by_action = {
         'list': [AllowAny],
         'retrieve': [AllowAny],
+        'search': [AllowAny],
         'create': [IsAuthenticated],
         'update': [IsOwnerOrAdmin],
         'partial_update': [IsOwnerOrAdmin],
@@ -147,7 +157,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         # BookSerializer, even though it clearly is. So we ignore the type check here.
         return BookSerializer  # pyright: ignore[reportReturnType]
 
-    @method_decorator(cache_page(settings.BOOK_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
+    @method_decorator(cache_page(settings.BOOKS_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
     def list(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """List books. Public endpoint, cached.
 
@@ -156,7 +166,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(settings.BOOK_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
+    @method_decorator(cache_page(settings.BOOKS_DETAIL_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
     def retrieve(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """Retrieve a book by ID. Public endpoint, cached.
 
@@ -165,22 +175,91 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().retrieve(request, *args, **kwargs)
 
+    @extend_schema(
+        summary='Search books',
+        description=(
+            'Search books by title with trigram similarity (supports typos). '
+            'Combine with author, tag, book_type, and country filters. '
+            'Omitting q returns all books. Results are cached for 3 minutes.'
+        ),
+        parameters=[
+            OpenApiParameter('q', str, description='Search query — supports typos via trigram similarity.'),
+            OpenApiParameter('author', int, many=True, description='Filter by author ID (repeatable).'),
+            OpenApiParameter('tag', int, many=True, description='Filter by tag ID (repeatable).'),
+            OpenApiParameter('book_type', str, description='Filter by book type (book / comic).'),
+            OpenApiParameter('country', str, description='Filter by country (case-insensitive contains).'),
+        ],
+        responses={200: BookSerializer(many=True)},
+        tags=['Books'],
+    )
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def search(self, request: Request) -> Response:
+        """Search books by title (trigram) with optional filters. Public, cached.
+
+        Returns:
+            Response: Paginated list of matching books.
+        """
+        q = request.query_params.get('q', '').strip()
+
+        params = dict(sorted(request.query_params.items()))
+        cache_key = f'{SEARCH_CACHE_PREFIX}:{hashlib.sha256(json.dumps(params).encode()).hexdigest()}'
+
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return Response(cached)
+
+        qs = Book.objects.annotate(
+            average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+            ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+        )
+
+        if q:
+            qs = qs.annotate(
+                similarity=Greatest(
+                    TrigramSimilarity('title', q),
+                    TrigramSimilarity('title_en', q),
+                ),
+            ).filter(similarity__gte=0.2).order_by('-similarity')
+        else:
+            qs = qs.order_by('id')
+
+        book_filter = BookFilter(request.query_params, queryset=qs)
+        if not book_filter.is_valid():
+            return Response(book_filter.errors, status=400)
+        qs = book_filter.qs
+
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = BookSerializer(page, many=True, context={'request': request})
+            result = self.get_paginated_response(serializer.data)
+            cache.set(cache_key, result.data, settings.SEARCH_CACHE_TTL)
+            return result
+
+        serializer = BookSerializer(qs, many=True, context={'request': request})
+        data = serializer.data
+        cache.set(cache_key, data, settings.SEARCH_CACHE_TTL)
+        return Response(data)
+
     def perform_create(self, serializer: BookSerializer) -> None:
-        """Create a book. Invalidate books cache."""
+        """Create a book. Invalidate books and search cache."""
         serializer.save(user=self.request.user)
         invalidate_cache_prefix(BOOKS_CACHE_PREFIX)
+        invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
 
     def perform_update(self, serializer: BookSerializer) -> None:  # noqa: PLR6301
-        """Update a book. Invalidate books cache."""
+        """Update a book. Invalidate books and search cache."""
         serializer.save()
         invalidate_cache_prefix(BOOKS_CACHE_PREFIX)
+        invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
 
     def perform_destroy(self, instance) -> None:  # noqa: ANN001
-        """Destroy a book. Invalidate books cache."""
+        """Destroy a book. Invalidate books and search cache."""
         invalidate_cache_prefix(BOOKS_CACHE_PREFIX)
+        invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
         return super().perform_destroy(instance)
 
 
+@extend_schema(tags=['Authors'])
 class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """AuthorViewSet provides CRUD operations for authors.
 
@@ -226,6 +305,7 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         return super().perform_destroy(instance)
 
 
+@extend_schema(tags=['Tags'])
 class TagViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """TagViewSet provides CRUD operations for tags.
 

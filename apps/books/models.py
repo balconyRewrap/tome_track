@@ -1,3 +1,4 @@
+"""Models for book app."""
 from typing import Final
 
 from django.conf import settings
@@ -50,6 +51,8 @@ class BookType(models.TextChoices):
 
 
 class Book(TimestampedModel):
+    """Model representing a book."""
+
     title = models.CharField(max_length=500)
     title_en = models.CharField(max_length=500)
     cover = models.ImageField(upload_to='covers/', null=True, blank=True, validators=[validate_cover_image])
@@ -71,7 +74,9 @@ class Book(TimestampedModel):
     )
 
     class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
-        indexes = [  # noqa: RUF012
+        """Meta class for Book model with indexes and validation constraints."""
+
+        indexes = [
             GinIndex(fields=['title'], name='book_title_trgm', opclasses=['gin_trgm_ops']),
             GinIndex(fields=['title_en'], name='book_title_en_trgm', opclasses=['gin_trgm_ops']),
             models.Index(fields=['book_type']),
@@ -79,6 +84,12 @@ class Book(TimestampedModel):
         ]
 
     def clean(self) -> None:
+        """Custom validation to enforce business rules on the Book model.
+
+        Raises:
+            ValidationError: If the book has more than the allowed number of authors or tags,
+                             or if a duplicate book with the same title and authors exists.
+        """
         super().clean()
         if not self.pk:
             return
@@ -98,5 +109,5 @@ class Book(TimestampedModel):
         for book in duplicate:
             if frozenset(book.authors.values_list('id', flat=True)) == author_ids:
                 raise ValidationError(
-                    'A book with this title and the same set of authors already exists.'
+                    'A book with this title and the same set of authors already exists.',
                 )

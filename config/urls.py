@@ -25,6 +25,7 @@ from apps.books.views import (
     BookViewSet,
     TagViewSet,
 )
+from apps.common.views import GetCacheView
 from apps.users.views.admin import (
     AdminUserViewSet,
 )
@@ -87,8 +88,12 @@ books_detail = BookViewSet.as_view({
     'patch':  'partial_update',
     'delete': 'destroy',
 })
+
+books_search = BookViewSet.as_view({'get': 'search'})
+
 urlpatterns += [
     path('api/v1/books/', books, name='books'),
+    path('api/v1/books/search/', books_search, name='book_search'),
     path('api/v1/books/<int:pk>/', books_detail, name='book_detail'),
 ]
 
@@ -108,9 +113,10 @@ urlpatterns += [
     path('api/v1/tags/<int:pk>/', tags_detail, name='tag-detail'),
 ]
 
-
+# testing views:
 urlpatterns += [
     path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
+    path('api/v1/testing/cache', GetCacheView.as_view(), name='get_cache'),
 ]
 
 # debug
