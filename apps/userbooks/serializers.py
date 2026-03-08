@@ -98,3 +98,21 @@ class UserBookWriteSerializer(UserBookSerializer):
                 'Rating cannot be set for books with status "plan_to_read".',
             )
         return attrs
+
+
+class UserBookUpdateSerializer(UserBookWriteSerializer):
+    """Serializer for partial_update of UserBook — book field is excluded (cannot be changed)."""
+
+    class Meta(UserBookSerializer.Meta):  # noqa: D106
+        fields = [
+            'id',
+            'user',
+            'status',
+            'current_chapter',
+            'current_page',
+            'is_masterpiece',
+            'rating',
+            'created_at',
+            'updated_at',
+        ]
+        extra_kwargs = UserBookSerializer.Meta.extra_kwargs
