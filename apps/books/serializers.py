@@ -34,7 +34,7 @@ class BookSerializer(serializers.ModelSerializer):
     cover = CoverImageField(use_url=True, required=False, allow_null=True)
     average_rating = serializers.FloatField(read_only=True)  # annotated
     ratings_count = serializers.IntegerField(read_only=True)  # annotated
-
+    authors = AuthorSerializer(many=True, read_only=True)
     class Meta:  # noqa: D106
         model = Book
         fields = [
@@ -105,55 +105,9 @@ class BookWriteSerializer(BookSerializer):
         required=False,
         allow_empty=True,
     )
+    authors = serializers.PrimaryKeyRelatedField(many=True, queryset=Author.objects.all(), required=True)
 
-    def to_internal_value(self, data):
-        import json
-
-        from django.http import QueryDict
-        from rest_framework.relations import ManyRelatedField
-
-        if isinstance(data, QueryDict):
-            # multipart/form-data arrives as a QueryDict.
-            # QueryDict.__setitem__ wraps every assigned value in an extra
-            # list, so doing ``data['tags'] = []`` stores ``[[]]`` and
-            # ManyRelatedField then receives ``[[]]`` via getlist() --
-            # child sees a list instead of a PK -> 'received list.'
-            # Also, a single author 'authors=1' gives get() = '1' (string)
-            # while 'authors=1&authors=2' needs getlist() = ['1', '2'].
-            # Converting to a plain dict up front avoids both problems.
-            plain = data.dict()  # {key: last_value_string} for scalars
-            for name, field in self.fields.items():
-                if isinstance(field, ManyRelatedField):
-                    plain[name] = data.getlist(name)
-            data = plain
-
-        # Normalise every M2M field.  Swagger produces garbage for empty
-        # arrays ('', [''], [[]]) and sometimes sends an entire array as
-        # a single JSON-encoded string (e.g. '["1","2"]').
-        for name, field in self.fields.items():
-            if not isinstance(field, ManyRelatedField):
-                continue
-            val = data.get(name)
-            if val in ('', None):
-                data = {**data, name: []}
-            elif isinstance(val, list):
-                # Try to unwrap a JSON-array sent as a single string item.
-                if len(val) == 1 and isinstance(val[0], str):
-                    try:
-                        parsed = json.loads(val[0])
-                        if isinstance(parsed, list):
-                            val = parsed
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-                # Unwrap [[1, 2]] -> [1, 2]
-                if len(val) == 1 and isinstance(val[0], (list, tuple)):
-                    val = list(val[0])
-                # Drop stray empty strings / empty lists
-                data = {**data, name: [v for v in val if v not in ('', [], None)]}
-
-        return super().to_internal_value(data)
-
-    def validate(self, attrs: dict) -> dict:  # noqa: PLR6301
+    def validate(self, attrs: dict) -> dict:
         """Validate cross-field business rules.
 
         Raises:
@@ -162,13 +116,12 @@ class BookWriteSerializer(BookSerializer):
         Returns:
             dict: The validated attributes.
         """
-        authors = attrs.get('authors', [])
+        authors = attrs.get('authors')
         tags = attrs.get('tags', [])
         book_type = attrs.get('book_type', BookType.BOOK)
         pages_total = attrs.get('pages_total')
         chapters_total = attrs.get('chapters_total')
-
-        if len(authors) > AUTHOR_MAX_COUNT:
+        if authors is not None and len(authors) > AUTHOR_MAX_COUNT:
             raise serializers.ValidationError(
                 {'authors': f'A book can have at most {AUTHOR_MAX_COUNT} authors.'},
             )
@@ -177,129 +130,26 @@ class BookWriteSerializer(BookSerializer):
             raise serializers.ValidationError(
                 {'tags': f'A book can have at most {TAG_MAX_COUNT} tags.'},
             )
-
-        if book_type == BookType.BOOK and not pages_total:
-            raise serializers.ValidationError(
-                {'pages_total': 'pages_total is required for book type "book".'},
-            )
-
-        if book_type == BookType.COMIC and not chapters_total:
-            raise serializers.ValidationError(
-                {'chapters_total': 'chapters_total is required for book type "comic".'},
-            )
-
-        return attrs
-
-# using bookwrite for PATCH break it if not changing authors, so i create special specializer for it.
-class BookUpdateSerializer(BookSerializer):
-    """Serializer for writing Book — cover rendered as binary upload in Swagger.
-
-    The viewset uses this class for create/update operations via
-    ``get_serializer_class`` (see ``books.views.BookViewSet``).  It also
-    contains a couple of helpers so that the horrible string that Swagger
-    sends when you tick **Send empty value** for the ``tags`` list is
-    converted into a real empty list instead of blowing up with
-    ``Incorrect type. Expected pk value, received str.``.
-    """
-
-    # drf-spectacular maps use_url=False → format: binary → file upload widget in Swagger.
-    # At runtime DRF still saves the uploaded file normally regardless of this flag.
-    cover = serializers.ImageField(use_url=False, required=False, allow_null=True)
-
-    # override the automatically-generated field so we can intercept
-    # the pathological values that the Swagger UI ships when the user
-    # checks **Send empty value** on a list field.  We intentionally
-    # subclass ``PrimaryKeyRelatedField`` rather than use the default
-    # model-generated one so we can tweak the behaviour later if needed.
-    tags = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Tag.objects.all(),
-        required=False,
-        allow_empty=True,
-    )
-
-    def to_internal_value(self, data):
-        import json
-
-        from django.http import QueryDict
-        from rest_framework.relations import ManyRelatedField
-
-        if isinstance(data, QueryDict):
-            # multipart/form-data arrives as a QueryDict.
-            # QueryDict.__setitem__ wraps every assigned value in an extra
-            # list, so doing ``data['tags'] = []`` stores ``[[]]`` and
-            # ManyRelatedField then receives ``[[]]`` via getlist() --
-            # child sees a list instead of a PK -> 'received list.'
-            # Also, a single author 'authors=1' gives get() = '1' (string)
-            # while 'authors=1&authors=2' needs getlist() = ['1', '2'].
-            # Converting to a plain dict up front avoids both problems.
-            plain = data.dict()  # {key: last_value_string} for scalars
-            for name, field in self.fields.items():
-                if isinstance(field, ManyRelatedField):
-                    plain[name] = data.getlist(name)
-            data = plain
-
-        # Normalise every M2M field.  Swagger produces garbage for empty
-        # arrays ('', [''], [[]]) and sometimes sends an entire array as
-        # a single JSON-encoded string (e.g. '["1","2"]').
-        for name, field in self.fields.items():
-            if not isinstance(field, ManyRelatedField):
-                continue
-            val = data.get(name)
-            if val in ('', None):
-                data = {**data, name: []}
-            elif isinstance(val, list):
-                # Try to unwrap a JSON-array sent as a single string item.
-                if len(val) == 1 and isinstance(val[0], str):
-                    try:
-                        parsed = json.loads(val[0])
-                        if isinstance(parsed, list):
-                            val = parsed
-                    except (json.JSONDecodeError, ValueError):
-                        pass
-                # Unwrap [[1, 2]] -> [1, 2]
-                if len(val) == 1 and isinstance(val[0], (list, tuple)):
-                    val = list(val[0])
-                # Drop stray empty strings / empty lists
-                data = {**data, name: [v for v in val if v not in ('', [], None)]}
-
-        return super().to_internal_value(data)
-
-    def validate(self, attrs: dict) -> dict:  # noqa: PLR6301
-        """Validate cross-field business rules.
-
-        Raises:
-            serializers.ValidationError: If any business rule is violated.
-
-        Returns:
-            dict: The validated attributes.
-        """
-        _authors = attrs.get('authors')
-        if _authors:
-            authors = _authors
-        tags = attrs.get('tags', [])
-        book_type = attrs.get('book_type', BookType.BOOK)
-        pages_total = attrs.get('pages_total')
-        chapters_total = attrs.get('chapters_total')
-        if _authors:
-            if len(_authors) > AUTHOR_MAX_COUNT:
+        if not self.partial:
+            if book_type == BookType.BOOK and not pages_total:
                 raise serializers.ValidationError(
-                    {'authors': f'A book can have at most {AUTHOR_MAX_COUNT} authors.'},
+                    {'pages_total': 'pages_total is required for book type "book".'},
                 )
 
-        if len(tags) > TAG_MAX_COUNT:
-            raise serializers.ValidationError(
-                {'tags': f'A book can have at most {TAG_MAX_COUNT} tags.'},
-            )
-
-        if book_type == BookType.BOOK and not pages_total:
-            raise serializers.ValidationError(
-                {'pages_total': 'pages_total is required for book type "book".'},
-            )
-
-        if book_type == BookType.COMIC and not chapters_total:
-            raise serializers.ValidationError(
-                {'chapters_total': 'chapters_total is required for book type "comic".'},
-            )
+            if book_type == BookType.COMIC and not chapters_total:
+                raise serializers.ValidationError(
+                    {'chapters_total': 'chapters_total is required for book type "comic".'},
+                )
+        else:
+            if not hasattr(self, 'initial_data') or not isinstance(self.initial_data, dict):
+                raise serializers.ValidationError('initial_data is required for partial updates.')
+            if book_type == BookType.BOOK and 'pages_total' in self.initial_data and not pages_total:
+                raise serializers.ValidationError(
+                    {'pages_total': 'pages_total is required for book type "book".'},
+                )
+            if book_type == BookType.COMIC and 'chapters_total' in self.initial_data and not chapters_total:
+                raise serializers.ValidationError(
+                    {'chapters_total': 'chapters_total is required for book type "comic".'},
+                )
 
         return attrs
