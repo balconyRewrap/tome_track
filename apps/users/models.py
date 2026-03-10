@@ -105,6 +105,13 @@ class PasswordResetToken(TimestampedModel):
     token = models.CharField(max_length=255, unique=True)
     used = models.BooleanField(default=False)
 
+    class Meta:  # pyright: ignore[reportIncompatibleVariableOverride]
+        """Meta class for PasswordResetToken model."""
+
+        indexes = [
+            models.Index(fields=['user', 'used', 'created_at']),
+        ]
+
     def __str__(self) -> str:
         """String representation of the PasswordResetToken.
 

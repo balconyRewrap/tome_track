@@ -40,4 +40,5 @@ class Review(TimestampedModel):
 
         indexes = [
             models.Index(fields=['book', 'is_public']),
+            models.Index(fields=['user']),
         ]
