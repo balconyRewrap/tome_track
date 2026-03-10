@@ -138,9 +138,7 @@ def test_list_returns_only_own_items(api_client, user, other_user, book, userboo
     # make sure another user's record is not leaked
     UserBook.objects.create(user=other_user, book=book, status=ReadingStatus.READING)
     second = api_client.get(USERBOOKS_URL)
-    print(type(second))
     data = second.json()
-    print(data)
     results2 = second.data.get('results', second.data)
     assert len(results2) == 1
 
@@ -176,7 +174,6 @@ def test_create_requires_auth(api_client, book):
 def test_cannot_create_without_book(api_client, user):
     api_client.force_authenticate(user=user)
     response = api_client.post(USERBOOKS_URL, {'status': ReadingStatus.READING}, format='json')
-    print(response.data)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 def test_cannot_create_duplicate_book(api_client, user, book):
@@ -228,7 +225,6 @@ def test_current_page_cannot_exceed_total(api_client, user, book, userbook):
     # update
     payload = {'current_page': book.pages_total + 1}
     response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
-    print(response.data)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 def test_rating_constraints(api_client, user, book, userbook):

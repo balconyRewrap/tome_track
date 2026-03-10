@@ -46,7 +46,6 @@ def test_login_success(api_client, user, db):
     """Successful login returns 200 and tokens."""
     cache.clear()
     response = api_client.post(LOGIN_URL, login_data)
-    print (response.data)
     assert response.status_code == status.HTTP_200_OK
     assert "access" in response.data
     assert "refresh" in response.data
@@ -66,7 +65,6 @@ def test_auth_check_success(api_client, user, db):
     access = login.data["access"]
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
     response = api_client.get(AUTH_CHECK_URL)
-    print(response.data)
     assert response.status_code == status.HTTP_200_OK
     assert response.data["email"] == test_user["email"]
 

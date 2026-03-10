@@ -53,7 +53,6 @@ def test_change_email_invalid_password(api_client, user, get_token):
     url = reverse("change_email")
     response = api_client.post(url, {"new_email": "newemail@example.com", "password": "WrongPass123"}, format="json")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    print(response.data)
     assert "password" in response.data['error']['details']
 
 
@@ -78,5 +77,4 @@ def test_change_email_token_version(api_client, user, get_token):
 
     # Now the request works again
     response = api_client.post(url, {"new_email": "another@example.com", "password": "StrongPass123"}, format="json")
-    print(response.data)
     assert response.status_code == status.HTTP_200_OK

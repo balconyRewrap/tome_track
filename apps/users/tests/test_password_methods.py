@@ -57,12 +57,10 @@ def test_reset_password_success(api_client, user, get_token):
 
     # old token no longer works
     response = api_client.post(url, {"token": reset_token, "new_password": "NewStrongPass123"}, format="json")
-    print(response.data)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "Invalid or expired token" in response.data['error']['details']['token']
     # old password no longer works
     response = api_client.post(reverse("token_obtain_pair"), {"email": user.email, "password": "StrongPass123"}, format="json")
-    print(response.data)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert "No active account found with the given credentials" in response.data['error']['details']['detail']
     # new password works
@@ -86,7 +84,6 @@ def test_reset_password_expired_token(api_client, user, get_token):
     url = reverse("password_reset_confirm")
     response = api_client.post(url, {"token": reset_token, "new_password": "NewStrongPass123"}, format="json")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    print(response.data)
     assert "Invalid or expired token." in response.data['error']['details']['token']
 
 def test_password_change(api_client, user, get_token):

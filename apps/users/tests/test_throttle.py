@@ -50,10 +50,8 @@ def test_register_throttle(api_client, db):
         data["email"] = f"user{i}@example.com"
         data["username"] = f"user{i}"
         response = api_client.post(REGISTER_URL, data, REMOTE_ADDR=throttle_remote_addr)
-        print(response.data)
         assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
         client = cache.client.get_client()  # pyright: ignore[reportAttributeAccessIssue]
-        print(list(client.keys('*')))
     # 11th request should be throttled
     data = valid_data.copy()
     data["email"] = "user29@example.com"

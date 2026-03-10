@@ -48,8 +48,6 @@ def test_admin_list_users(api_client, admin_user, get_token):
     url = reverse("admin_users")
     response = api_client.get(url)
     assert response.status_code == status.HTTP_200_OK
-    print(response.data['results'])
-    print(type(response.data['results']))
     assert isinstance(response.data['results'], list)
     assert any(u["email"] == admin_user.email for u in response.data['results'])
 
