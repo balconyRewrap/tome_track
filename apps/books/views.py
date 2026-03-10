@@ -131,7 +131,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     Cache is invalidated on create, update and destroy.
     """
 
-    queryset = Book.objects.annotate(
+    queryset = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
         average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
         ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
     ).order_by('id')
