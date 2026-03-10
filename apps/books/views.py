@@ -215,7 +215,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if cached is not None:
             return Response(cached)
 
-        qs = Book.objects.annotate(
+        qs = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
             average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
             ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
         )
@@ -322,7 +322,7 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         'destroy': [IsAdminRole],
     }
 
-    @method_decorator(cache_page(AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX), name='dispatch')
+    @method_decorator(cache_page(AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX))
     def list(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """List authors. Public endpoint, cached.
 
@@ -331,7 +331,7 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         """
         return super().list(request, *args, **kwargs)
 
-    @method_decorator(cache_page(AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX), name='dispatch')
+    @method_decorator(cache_page(AUTHOR_CACHE_TTL, key_prefix=AUTHOR_CACHE_PREFIX))
     def retrieve(self, request: Request, *args, **kwargs):  # noqa: ANN201, ANN002, ANN003
         """Retrieve an author by ID. Public endpoint, cached.
 

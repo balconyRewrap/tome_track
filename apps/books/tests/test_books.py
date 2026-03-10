@@ -88,7 +88,7 @@ def comic(db, user, author, tag) -> Book:
         title_en='Test Book EN',
         description='A test book.',
         book_type='comic',
-        pages_total=300,
+        chapters_total=50,
         country='US',
         user=user,
     )

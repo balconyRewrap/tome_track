@@ -21,7 +21,7 @@ class AuthorSerializer(serializers.ModelSerializer):
         model = Author
         fields = ['id', 'name']
 
-    def validate_name(self, value: str) -> str:  # noqa: PLR6301
+    def validate_name(self, value: str) -> str:
         """Validate that the name does not contain control characters.
 
         Args:
@@ -33,7 +33,10 @@ class AuthorSerializer(serializers.ModelSerializer):
         Returns:
             str: The validated name.
         """
-        if Author.objects.filter(name=value).exists():
+        qs = Author.objects.filter(name=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
             raise serializers.ValidationError('An author with this name already exists.')
         return value
 
@@ -47,7 +50,7 @@ class TagSerializer(serializers.ModelSerializer):
         model = Tag
         fields = ['id', 'name', 'slug']
 
-    def validate_name(self, value: str) -> str:  # noqa: PLR6301
+    def validate_name(self, value: str) -> str:
         """Validate that the name does not contain control characters.
 
         Args:
@@ -59,7 +62,10 @@ class TagSerializer(serializers.ModelSerializer):
         Returns:
             str: The validated name.
         """
-        if Tag.objects.filter(name=value).exists():
+        qs = Tag.objects.filter(name=value)
+        if self.instance:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
             raise serializers.ValidationError('A tag with this name already exists.')
         return value
 
@@ -179,13 +185,15 @@ class BookWriteSerializer(BookSerializer):
                     {'chapters_total': 'chapters_total is required for book type "comic".'},
                 )
         else:
-            if not hasattr(self, 'initial_data') or not isinstance(self.initial_data, dict):
-                raise serializers.ValidationError('initial_data is required for partial updates.')
-            if book_type == BookType.BOOK and 'pages_total' in self.initial_data and not pages_total:
+            existing_pages = getattr(self.instance, 'pages_total', None)
+            existing_chapters = getattr(self.instance, 'chapters_total', None)
+            effective_pages = attrs.get('pages_total', existing_pages)
+            effective_chapters = attrs.get('chapters_total', existing_chapters)
+            if book_type == BookType.BOOK and not effective_pages:
                 raise serializers.ValidationError(
                     {'pages_total': 'pages_total is required for book type "book".'},
                 )
-            if book_type == BookType.COMIC and 'chapters_total' in self.initial_data and not chapters_total:
+            if book_type == BookType.COMIC and not effective_chapters:
                 raise serializers.ValidationError(
                     {'chapters_total': 'chapters_total is required for book type "comic".'},
                 )

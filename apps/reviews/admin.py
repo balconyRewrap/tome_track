@@ -3,6 +3,7 @@ from django.contrib import admin
 from django.db.models import QuerySet
 from django.http.request import HttpRequest
 
+from apps.common.cache_utils import invalidate_cache_by_key_prefix
 from apps.reviews.models import Review
 
 
@@ -22,7 +23,11 @@ class ReviewAdmin(admin.ModelAdmin):
             request (HttpRequest): The request object.
             queryset (QuerySet[Review]): The queryset of Review to make private.
         """
-        updated = queryset.update(is_public=False)
+        updated = []
+        for review in queryset:
+            review.is_public = False
+            review.save(update_fields=["is_public"])
+            updated.append(review)
         self.message_user(request, f"{updated} reviews marked as private.")
 
     @admin.action(description="Make selected reviews public")
@@ -33,5 +38,14 @@ class ReviewAdmin(admin.ModelAdmin):
             request (HttpRequest): The request object.
             queryset (QuerySet[Review]): The queryset of Review to make public.
         """
-        updated = queryset.update(is_public=True)
-        self.message_user(request, f"{updated} reviews marked as public.")
+        updated = []
+        for review in queryset:
+            review.is_public = True
+            review.save(update_fields=["is_public"])
+            updated.append(review)
+        self.message_user(request, f"{len(updated)} reviews marked as public.")
+
+    def _invalidate_review_cache(self, review: Review) -> None:  # noqa: PLR6301
+        """Helper to invalidate cache for a review."""
+        invalidate_cache_by_key_prefix(f"reviews:book:{review.book.id}:list")  # pyright: ignore[reportAttributeAccessIssue]
+        invalidate_cache_by_key_prefix(f"reviews:book:{review.book.id}:retrieve")  # pyright: ignore[reportAttributeAccessIssue]

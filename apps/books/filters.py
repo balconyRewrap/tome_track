@@ -7,8 +7,12 @@ from apps.books.models import Author, Book, BookType, Tag
 class BookFilter(filters.FilterSet):
     """FilterSet for Book model supporting author, tag, book_type, and country filters."""
 
-    author = filters.ModelMultipleChoiceFilter(field_name='authors', queryset=Author.objects.all())
-    tag = filters.ModelMultipleChoiceFilter(field_name='tags', queryset=Tag.objects.all())
+    author = filters.ModelMultipleChoiceFilter(
+        field_name='authors', queryset=Author.objects.all(), distinct=True
+    )
+    tag = filters.ModelMultipleChoiceFilter(
+        field_name='tags', queryset=Tag.objects.all(), distinct=True
+    )
     book_type = filters.ChoiceFilter(choices=BookType.choices)
     country = filters.CharFilter(lookup_expr='icontains')
 

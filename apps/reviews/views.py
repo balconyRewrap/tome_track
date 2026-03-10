@@ -192,7 +192,7 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if book_id is not None:
             qs = qs.filter(book_id=book_id)
 
-        return qs.order_by('updated_at')
+        return qs.order_by('-updated_at')
 
     @cache_response(timeout=REVIEWS_CACHE_TTL, key_func=review_cache_key)
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # pyright: ignore[reportIncompatibleMethodOverride]
@@ -224,7 +224,7 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 
         if not query:
             return Response({"detail": "Query parameter is required."}, status=400)
-        qs = self.get_queryset().filter(book_id=book_id)
+        qs = self.get_queryset()
         reviews = (
             qs.annotate(
                 similarity=Greatest(
@@ -260,8 +260,8 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 
     def perform_destroy(self, instance: Review) -> None:
         """Delete a review and invalidate the cache for the book's reviews list and detail view."""
+        super().perform_destroy(instance)
         self._invalidate_review_cache(instance)
-        return super().perform_destroy(instance)
 
     def _invalidate_review_cache(self, review: Review) -> None:  # noqa: PLR6301
         """Helper to invalidate cache for a review."""
@@ -270,8 +270,7 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         invalidate_cache_by_key_prefix(f"reviews:book:{review.book.id}:list")  # pyright: ignore[reportAttributeAccessIssue]
         # Invalidate the cache for the review detail view,
         # so that the updated/deleted review will be reflected in the detail view.
-        invalidate_cache_by_key_prefix(f"reviews:book:{review.book.id}:retrieve:user:{review.user_id}")  # pyright: ignore[reportAttributeAccessIssue]
-        invalidate_cache_by_key_prefix(f"reviews:book:{review.book.id}:retrieve:user:anon")  # pyright: ignore[reportAttributeAccessIssue]
+        invalidate_cache_by_key_prefix(f"reviews:book:{review.book.id}:retrieve")  # pyright: ignore[reportAttributeAccessIssue]
 
 
 @extend_schema(
@@ -297,4 +296,4 @@ class UserMeReviewsView(generics.ListAPIView):
         """
         if getattr(self, 'swagger_fake_view', False):
             return Review.objects.none()
-        return Review.objects.filter(user=self.request.user).order_by('updated_at')
+        return Review.objects.filter(user=self.request.user).order_by('-updated_at')

@@ -55,13 +55,9 @@ class ReviewWriteSerializer(ReviewSerializer):
         if not book_id:
             raise serializers.ValidationError("Book ID is required in the URL.")
 
-        if self.instance is None and user is not None:
-            # This is a create operation, check if a review by this user for this book already exists.
-            if Review.objects.filter(user=user, book_id=book_id).exists():
-                raise serializers.ValidationError("You have already reviewed this book.")
-        elif self.instance is not None and user is not None and (self.instance.user != user and user.role != 'admin'):
-            # This is an update operation, check if the review belongs to the user.
-            raise serializers.ValidationError("You can only update your own reviews.")
+        # This is a create operation, check if a review by this user for this book already exists.
+        if self.instance is None and user is not None and Review.objects.filter(user=user, book_id=book_id).exists():
+            raise serializers.ValidationError("You have already reviewed this book.")
 
         # this check already had in partial, so useless for it again
         if not self.partial and not Book.objects.filter(id=book_id).exists():
