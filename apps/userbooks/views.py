@@ -140,7 +140,7 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         Returns:
             QuerySet: the queryset of UserBook objects for the current user or all if admin.
         """
-        if self.request.user.is_staff:
+        if self.request.user.is_authenticated and self.request.user.role == 'admin':
             return UserBook.objects.all()
 
         return UserBook.objects.filter(user=self.request.user).order_by('id')
