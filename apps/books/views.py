@@ -268,7 +268,44 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         invalidate_cache_by_key_prefix(SEARCH_CACHE_PREFIX)
 
 
-@extend_schema(tags=['Authors'])
+@extend_schema_view(
+    list=extend_schema(
+        summary='List authors',
+        description='Returns a paginated list of all authors. Public endpoint, cached.',
+        responses={200: AuthorSerializer(many=True)},
+        tags=['Authors'],
+    ),
+    retrieve=extend_schema(
+        summary='Retrieve an author',
+        description='Returns details of a single author by ID. Public endpoint, cached.',
+        responses={
+            200: AuthorSerializer,
+            404: OpenApiResponse(description='Author not found.'),
+        },
+        tags=['Authors'],
+    ),
+    create=extend_schema(
+        summary='Create an author',
+        description='Creates a new author. Requires authentication.',
+        responses={
+            201: AuthorSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+        },
+        tags=['Authors'],
+    ),
+    destroy=extend_schema(
+        summary='Delete an author',
+        description='Permanently deletes an author. Requires admin role.',
+        responses={
+            204: OpenApiResponse(description='Author deleted successfully.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+            403: OpenApiResponse(description='You do not have permission to perform this action.'),
+            404: OpenApiResponse(description='Author not found.'),
+        },
+        tags=['Authors'],
+    ),
+)
 class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """AuthorViewSet provides CRUD operations for authors.
 
@@ -314,7 +351,45 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         return super().perform_destroy(instance)
 
 
-@extend_schema(tags=['Tags'])
+@extend_schema_view(
+    list=extend_schema(
+        summary='List tags',
+        description='Returns a paginated list of all tags. Public endpoint, cached.',
+        responses={200: TagSerializer(many=True)},
+        tags=['Tags'],
+    ),
+    retrieve=extend_schema(
+        summary='Retrieve a tag',
+        description='Returns details of a single tag by ID. Public endpoint, cached.',
+        responses={
+            200: TagSerializer,
+            404: OpenApiResponse(description='Tag not found.'),
+        },
+        tags=['Tags'],
+    ),
+    create=extend_schema(
+        summary='Create a tag',
+        description='Creates a new tag. Requires admin role.',
+        responses={
+            201: TagSerializer,
+            400: OpenApiResponse(description='Validation error.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+            403: OpenApiResponse(description='You do not have permission to perform this action.'),
+        },
+        tags=['Tags'],
+    ),
+    destroy=extend_schema(
+        summary='Delete a tag',
+        description='Permanently deletes a tag. Requires admin role.',
+        responses={
+            204: OpenApiResponse(description='Tag deleted successfully.'),
+            401: OpenApiResponse(description='Authentication credentials were not provided.'),
+            403: OpenApiResponse(description='You do not have permission to perform this action.'),
+            404: OpenApiResponse(description='Tag not found.'),
+        },
+        tags=['Tags'],
+    ),
+)
 class TagViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """TagViewSet provides CRUD operations for tags.
 

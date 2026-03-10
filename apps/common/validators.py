@@ -1,19 +1,24 @@
 """Validators for Django project."""
+import re
+
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from PIL import Image, UnidentifiedImageError
+from rest_framework.exceptions import ValidationError as DRFValidationError
 
 from apps.common.constants import ALLOWED_COVER_TYPES, COVER_MAX_SIZE_BYTES
 
 
-def validate_cover_image(image: InMemoryUploadedFile) -> None:
+def validate_model_cover_image(image: InMemoryUploadedFile) -> None:
     """Validate uploaded cover image for size, content type, and integrity.
+
+    Used in models, not in serializers.
 
     Args:
         image: The uploaded image file to validate.
 
     Raises:
-        ValidationError: If the image fails any of the validation checks.
+        django.core.exceptions.ValidationError: If the image fails any of the validation checks.
     """
     # Size check
     if image.size > COVER_MAX_SIZE_BYTES:
@@ -30,3 +35,26 @@ def validate_cover_image(image: InMemoryUploadedFile) -> None:
         img.verify()
     except (UnidentifiedImageError, Exception) as e:
         raise ValidationError("File is not a valid image.") from e
+
+
+def validate_serializer_name(value: str) -> str:
+    """Validate the name field to ensure it does not contain invalid characters.
+
+    Used in serializers, not in models.
+
+    Args:
+        value (str): The name of the book.
+
+    Returns:
+        str: The validated name of the book.
+
+    Raises:
+        rest_framework.exceptions.ValidationError: If the name contains invalid characters.
+    """
+    if not re.match(r"^[\w\s.,'()-:]+$", value):
+        raise DRFValidationError('Name cannot contain invalid characters.')
+
+    if re.search(r"[\x00-\x1F]", value):
+        raise DRFValidationError("Name cannot contain control characters.")
+
+    return value

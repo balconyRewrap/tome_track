@@ -83,6 +83,8 @@ AUTHOR_CACHE_TTL = 60 * 60  # Cache author details for 1 hour
 TAG_CACHE_TTL = 60 * 600  # Cache tag details for 10 hours
 USERBOOKS_CACHE_TTL = 60 * 60  # Cache userbooks list for 1 hour
 USERBOOKS_DETAIL_CACHE_TTL = 60 * 120  # Cache userbook details
+REVIEWS_CACHE_TTL = 60 * 5  # 5 minutes
+REVIEWS_DETAIL_CACHE_TTL = 60 * 60  # 1 hour
 
 ROOT_URLCONF = 'config.urls'
 
@@ -158,6 +160,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])  # pyright: ignore[reportArgumentType]
 CORS_ALLOWED_CREDENTIALS = True
 
+# Throttle rates
+ANON_THROTTLE_RATE = '60/min'
+USER_THROTTLE_RATE = '300/min'
+REGISTER_THROTTLE_RATE = '10/hour'
+LOGIN_THROTTLE_RATE = '5/min'
+# its not password
+PASSWORD_RESET_THROTTLE_RATE = '5/hour'  # noqa: S105
+
 # DRF
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
@@ -173,11 +183,11 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '60/min',
-        'user': '300/min',
-        'register': '10/hour',
-        'login': '5/min',
-        'password_reset': '5/hour',
+        'anon': ANON_THROTTLE_RATE,
+        'user': USER_THROTTLE_RATE,
+        'register': REGISTER_THROTTLE_RATE,
+        'login': LOGIN_THROTTLE_RATE,
+        'password_reset': PASSWORD_RESET_THROTTLE_RATE,
     },
     'EXCEPTION_HANDLER': 'apps.common.exceptions.custom_exception_handler',
     'DEFAULT_FILTER_BACKENDS': [

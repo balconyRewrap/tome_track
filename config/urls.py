@@ -26,6 +26,7 @@ from apps.books.views import (
     TagViewSet,
 )
 from apps.common.views import GetCacheView
+from apps.reviews.views import ReviewViewSet, UserMeReviewsView
 from apps.userbooks.views import UserBookViewSet
 from apps.users.views.admin import (
     AdminUserViewSet,
@@ -61,6 +62,7 @@ urlpatterns += [
 # user
 urlpatterns += [
     path('api/v1/users/me/', UserMeView.as_view(), name='user_me'),
+    path('api/v1/users/me/reviews/', UserMeReviewsView.as_view(), name='user_me_reviews'),
     path('api/v1/users/me/change-email/', ChangeEmailView.as_view(), name='change_email'),
     path('api/v1/users/password/reset/', PasswordResetView.as_view(), name='password_reset'),
     path('api/v1/users/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
@@ -127,6 +129,23 @@ userbooks_detail = UserBookViewSet.as_view({
 urlpatterns += [
     path('api/v1/userbooks/', userbooks, name='userbooks'),
     path('api/v1/userbooks/<int:pk>/', userbooks_detail, name='userbook-detail'),
+]
+
+# reviews
+reviews = ReviewViewSet.as_view({
+    'get': 'list',
+    'post': 'create',
+})
+reviews_detail = ReviewViewSet.as_view({
+    'get': 'retrieve',
+    'patch': 'partial_update',
+    'delete': 'destroy',
+})
+reviews_search = ReviewViewSet.as_view({'get': 'search'})
+urlpatterns += [
+    path('api/v1/books/<int:book_pk>/reviews/', reviews, name='reviews'),
+    path('api/v1/books/<int:book_pk>/reviews/search/', reviews_search, name='review_search'),
+    path('api/v1/books/<int:book_pk>/reviews/<int:pk>/', reviews_detail, name='review-detail'),
 ]
 
 # testing views:

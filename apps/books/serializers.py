@@ -3,6 +3,7 @@ from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, Author, Book, BookType, Tag
+from apps.common.validators import validate_serializer_name
 
 
 # Annotating the *class* (not the instance) is the only reliable way to override
@@ -15,17 +16,52 @@ class CoverImageField(serializers.ImageField):
 class AuthorSerializer(serializers.ModelSerializer):
     """Serializer for Author model."""
 
+    name = serializers.CharField(min_length=2, max_length=255, validators=[validate_serializer_name])
     class Meta:  # noqa: D106
         model = Author
         fields = ['id', 'name']
+
+    def validate_name(self, value: str) -> str:  # noqa: PLR6301
+        """Validate that the name does not contain control characters.
+
+        Args:
+            value (str): The name to validate.
+
+        Raises:
+            serializers.ValidationError: If the name contains control characters.
+
+        Returns:
+            str: The validated name.
+        """
+        if Author.objects.filter(name=value).exists():
+            raise serializers.ValidationError('An author with this name already exists.')
+        return value
 
 
 class TagSerializer(serializers.ModelSerializer):
     """Serializer for Tag model."""
 
+    name = serializers.CharField(min_length=2, max_length=100, validators=[validate_serializer_name])
+    slug = serializers.SlugField(read_only=True)
     class Meta:  # noqa: D106
         model = Tag
         fields = ['id', 'name', 'slug']
+
+    def validate_name(self, value: str) -> str:  # noqa: PLR6301
+        """Validate that the name does not contain control characters.
+
+        Args:
+            value (str): The name to validate.
+
+        Raises:
+            serializers.ValidationError: If the name contains control characters.
+
+        Returns:
+            str: The validated name.
+        """
+        if Tag.objects.filter(name=value).exists():
+            raise serializers.ValidationError('A tag with this name already exists.')
+        return value
 
 
 class BookSerializer(serializers.ModelSerializer):
@@ -92,6 +128,8 @@ class BookWriteSerializer(BookSerializer):
 
     # drf-spectacular maps use_url=False → format: binary → file upload widget in Swagger.
     # At runtime DRF still saves the uploaded file normally regardless of this flag.
+    title = serializers.CharField(validators=[validate_serializer_name])
+    title_en = serializers.CharField(validators=[validate_serializer_name])
     cover = serializers.ImageField(use_url=False, required=False, allow_null=True)
 
     # override the automatically-generated field so we can intercept

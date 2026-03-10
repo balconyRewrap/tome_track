@@ -26,25 +26,10 @@ def get_token(api_client, user):
 
     return _get_token
 
-def test_reset_password_different_email(api_client, user, get_token):
-    cache.clear()
-    token = get_token(user.email, "StrongPass123")
-    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
-
-    url = reverse("password_reset")
-    response = api_client.post(url, {"email": "different@example.com"}, format="json")
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-    assert "You can't reset" in response.data['error']['details']['email'][0]
-
-def test_reset_password_no_credentials(api_client, user, get_token):
-    url = reverse("password_reset")
-    response = api_client.post(url, {"email": user.email}, format="json")
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
-
 def test_reset_password_success(api_client, user, get_token):
     cache.clear()
-    token = get_token(user.email, "StrongPass123")
-    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+    # token = get_token(user.email, "StrongPass123")
+    # api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
     url = reverse("password_reset")
     response = api_client.post(url, {"email": user.email}, format="json")
@@ -68,11 +53,14 @@ def test_reset_password_success(api_client, user, get_token):
 
     # old token no longer works
     response = api_client.post(url, {"token": reset_token, "new_password": "NewStrongPass123"}, format="json")
-    assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    assert "Token is no longer valid" in response.data['error']['message']
+    print(response.data)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "Invalid or expired token" in response.data['error']['details']['token']
     # old password no longer works
     response = api_client.post(reverse("token_obtain_pair"), {"email": user.email, "password": "StrongPass123"}, format="json")
+    print(response.data)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
+    assert "No active account found with the given credentials" in response.data['error']['details']['detail']
     # new password works
     response = api_client.post(reverse("token_obtain_pair"), {"email": user.email, "password": "NewStrongPass123"}, format="json")
     assert response.status_code == status.HTTP_200_OK

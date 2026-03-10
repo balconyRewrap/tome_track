@@ -8,7 +8,7 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.tokens import Token
 
-from apps.users.models import User as UserModel
+from apps.common.validators import validate_serializer_name
 
 User = get_user_model()
 
@@ -25,7 +25,7 @@ class RegisterSerializer(serializers.Serializer):
     """Serializer for user registration."""
 
     email = serializers.EmailField(validators=[EmailValidator()])
-    username = serializers.CharField(max_length=50)
+    username = serializers.CharField(max_length=50, validators=[validate_serializer_name])
     password = serializers.CharField(write_only=True, min_length=8)
 
     def validate_email(self, value: str) -> str:  # noqa: PLR6301
@@ -89,7 +89,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """Custom serializer for obtaining JWT tokens that includes the user's role in the token payload."""
 
     @classmethod
-    def get_token(cls, user) -> Token:  # noqa: ANN401
+    def get_token(cls, user) -> Token:  # noqa: ANN001
         """Get JWT token.
 
         Returns:
@@ -103,9 +103,12 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs: dict) -> dict:
         """Validate serializer data.
-        
+
         Returns:
             dict: validated attributes.
+
+        Raises:
+            serializers.ValidationError: if account is disabled.
         """
         data = super().validate(attrs)
         # User has it, but pylance doesn't recognize it, so we ignore the type errors here
@@ -190,24 +193,6 @@ class PasswordResetSerializer(serializers.Serializer):
     """Serializer for requesting a password reset."""
 
     email = serializers.EmailField(validators=[EmailValidator()])
-
-    def validate_email(self, value: str) -> str:
-        """Validate that a user with the given email exists.
-
-        Returns:
-            str: The validated email address.
-
-        Raises:
-            serializers.ValidationError: If no user with the given email exists.
-        """
-        user = self.context['request'].user
-        # TODO: delete after implementing email sending
-        # currently we need to be able to test the password reset flow without email sending
-        if not user.email == value:
-            raise serializers.ValidationError("You can't reset this user password.")
-        if not User.objects.filter(email=value).exists():
-            raise serializers.ValidationError("User with this email does not exist.")
-        return value
 
 
 class PasswordResetConfirmSerializer(serializers.Serializer):

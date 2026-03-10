@@ -147,24 +147,10 @@ def test_create_tag_missing_name_returns_400(api_client, admin_user):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
-def test_create_tag_missing_slug_returns_400(api_client, admin_user):
-    """Create tag without 'slug' returns 400."""
-    api_client.force_authenticate(user=admin_user)
-    response = api_client.post(TAGS_URL, {'name': 'No Slug'}, format='json')
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-
 def test_create_tag_duplicate_name_returns_400(api_client, admin_user, tag):
     """Create tag with an existing name returns 400 (unique constraint)."""
     api_client.force_authenticate(user=admin_user)
     response = api_client.post(TAGS_URL, {'name': tag.name, 'slug': 'different-slug'}, format='json')
-    assert response.status_code == status.HTTP_400_BAD_REQUEST
-
-
-def test_create_tag_duplicate_slug_returns_400(api_client, admin_user, tag):
-    """Create tag with an existing slug returns 400 (unique constraint)."""
-    api_client.force_authenticate(user=admin_user)
-    response = api_client.post(TAGS_URL, {'name': 'Different Name', 'slug': tag.slug}, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 

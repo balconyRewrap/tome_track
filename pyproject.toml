@@ -12,7 +12,6 @@ dependencies = [
     "django-redis>=6.0.0",
     "djangorestframework>=3.16.1",
     "djangorestframework-simplejwt>=5.5.1",
-    "drf-extensions>=0.7.1",
     "drf-spectacular>=0.29.0",
     "factory-boy>=3.3.3",
     "faker>=40.5.1",
@@ -89,6 +88,8 @@ max-args = 67
 [tool.ruff.lint.per-file-ignores]
 # DRF overrides don't need to be documented again, they have default behaviour.
 "apps/users/permissions.py" = ["ANN001", "ANN201", "ARG002", "D102", "PLR6301"]
+# spliting documentation of attribute to be less then 90 symbols breakes the autodocumentation.
+"*/models.py" = ["E501"]
 # migrations are auto generated
 "*/migrations/*.py" = ["ALL"]
 

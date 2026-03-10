@@ -10,9 +10,8 @@ from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework_extensions.cache.decorators import cache_response
 
-from apps.common.cache_utils import invalidate_cache_by_key_prefix
+from apps.common.cache_utils import cache_response, invalidate_cache_by_key_prefix
 from apps.common.mixins import ActionPermissionsMixin
 from apps.common.permissions import IsOwnerOrAdmin
 from apps.userbooks.filters import UserBookFilter
@@ -43,7 +42,7 @@ def userbook_cache_key(
     Returns:
         str: The cache key for the userbooks list or detail view.
     """
-    return f"userbooks_user_{request.user.pk}_{view_method.__name__}"
+    return f"userbooks:user:{request.user.pk}:{view_method.__name__}"
 
 
 @extend_schema_view(
@@ -188,4 +187,4 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 
     def _invalidate_userbooks_cache(self) -> None:
         """Helper to invalidate userbooks cache."""
-        invalidate_cache_by_key_prefix(f'userbooks_user_{self.request.user.pk}_')
+        invalidate_cache_by_key_prefix(f'userbooks:user:{self.request.user.pk}:')
