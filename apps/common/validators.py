@@ -51,6 +51,9 @@ def validate_serializer_name(value: str) -> str:
     Raises:
         rest_framework.exceptions.ValidationError: If the name contains invalid characters.
     """
+    value = value.strip()
+    if not value:
+        raise DRFValidationError("Name cannot be empty.")
     if not re.match(r"^[\w\s.,'()-:]+$", value):
         raise DRFValidationError('Name cannot contain invalid characters.')
     if re.search(r"[\x00-\x1F]", value):

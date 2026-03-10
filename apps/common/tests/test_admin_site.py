@@ -28,7 +28,7 @@ def test_admin_access_allowed_ip(settings):
     cache.clear()
     client = APIClient()
     response = client.get(admin_panel, REMOTE_ADDR='123.123.123.123')
-    assert response.status_code != status.HTTP_403_FORBIDDEN
+    assert response.status_code != status.HTTP_403_FORBIDDEN  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_admin_access_blocked_ip(settings):
@@ -46,12 +46,12 @@ def test_admin_access_blocked_ip(settings):
 
     # REMOTE_ADDR differs from the allowed list
     response = client.get(admin_panel, REMOTE_ADDR='111.111.111.111')
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_403_FORBIDDEN  # pyright: ignore[reportAttributeAccessIssue]
 
     # even if the forwarded header is set, the first value is used
     response = client.get(
         admin_panel,
         HTTP_X_FORWARDED_FOR='111.111.111.111, 123.123.123.123',
     )
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_403_FORBIDDEN  # pyright: ignore[reportAttributeAccessIssue]
 

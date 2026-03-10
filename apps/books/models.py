@@ -57,8 +57,7 @@ class Tag(TimestampedModel):
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         """Create slug before saving."""
-        if not self.slug:
-            self.slug = slugify(self.name)
+        self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
 
