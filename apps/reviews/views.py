@@ -176,13 +176,13 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         # If the user is staff, they can see all reviews.
         # if user.is_authenticated, he has role.
         if self.request.user.is_authenticated and self.request.user.role == 'admin':
-            qs = Review.objects.all()
+            qs = Review.objects.select_related('user', 'book').all()
         # If authenticated, they can see public reviews and their own reviews.
         elif self.request.user.is_authenticated:
-            qs = Review.objects.filter(Q(is_public=True) | Q(user=self.request.user))
+            qs = Review.objects.select_related('user', 'book').filter(Q(is_public=True) | Q(user=self.request.user))
         # If not authenticated, they can only see public reviews.
         else:
-            qs = Review.objects.filter(is_public=True)
+            qs = Review.objects.select_related('user', 'book').filter(is_public=True)
         # If book_id is provided in the URL, filter reviews by book_id.
         if book_id is not None:
             qs = qs.filter(book_id=book_id)
