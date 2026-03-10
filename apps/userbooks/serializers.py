@@ -46,7 +46,6 @@ class UserBookWriteSerializer(UserBookSerializer):
         Validate by:
         - If the book is marked as a masterpiece, its status must be "completed".
         - Current page can only be set for books of type "book".
-        - Current chapter can only be set for books of type "comic".
         - Current page cannot exceed the total pages of the book.
         - Rating must be between 0 and 10.
         - Rating cannot be set for books with status "plan_to_read".
@@ -57,11 +56,21 @@ class UserBookWriteSerializer(UserBookSerializer):
         Raises:
             serializers.ValidationError: If any of the validation rules are violated.
         """
-        is_masterpiece = attrs.get('is_masterpiece', False)
         status = attrs.get('status')
+        if self.partial and self.instance and status is None:
+            status = self.instance.status
+
+        is_masterpiece_default = (
+            getattr(self.instance, 'is_masterpiece', False)
+            if self.partial
+            else False
+        )
+        is_masterpiece = attrs.get('is_masterpiece', is_masterpiece_default)
+
         current_page = attrs.get('current_page')
         book = attrs.get('book')
         rating = attrs.get('rating')
+
         if not self.partial and not book:
             raise serializers.ValidationError(
                 'Book is required.',
@@ -85,12 +94,13 @@ class UserBookWriteSerializer(UserBookSerializer):
             raise serializers.ValidationError(
                 'Current page cannot be greater than total pages of the book.',
             )
-
-        if rating and (rating < MIN_RATING or rating > MAX_RATING):
+        # not just check on rating, but check on is not None, because
+        # rating can be 0, and we want to allow it.
+        if rating is not None and (rating < MIN_RATING or rating > MAX_RATING):
             raise serializers.ValidationError(
                 f'Rating must be between {MIN_RATING} and {MAX_RATING}.',
             )
-        if rating and status and status == ReadingStatus.PLAN_TO_READ:
+        if rating is not None and status == ReadingStatus.PLAN_TO_READ:
             raise serializers.ValidationError(
                 'Rating cannot be set for books with status "plan_to_read".',
             )
@@ -136,5 +146,9 @@ class UserBookUpdateSerializer(UserBookWriteSerializer):
         if current_page and book and book.pages_total and current_page > book.pages_total:
             raise serializers.ValidationError(
                 'Current page cannot be greater than total pages of the book.',
+            )
+        if current_page and book and book.book_type != BookType.BOOK:
+            raise serializers.ValidationError(
+                'Current page can be set only for books of type "book".',
             )
         return super().validate(attrs)

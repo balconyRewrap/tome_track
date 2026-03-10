@@ -8,10 +8,10 @@ class BookFilter(filters.FilterSet):
     """FilterSet for Book model supporting author, tag, book_type, and country filters."""
 
     author = filters.ModelMultipleChoiceFilter(
-        field_name='authors', queryset=Author.objects.all(), distinct=True
+        field_name='authors', queryset=Author.objects.all(), distinct=True,
     )
     tag = filters.ModelMultipleChoiceFilter(
-        field_name='tags', queryset=Tag.objects.all(), distinct=True
+        field_name='tags', queryset=Tag.objects.all(), distinct=True,
     )
     book_type = filters.ChoiceFilter(choices=BookType.choices)
     country = filters.CharFilter(lookup_expr='icontains')

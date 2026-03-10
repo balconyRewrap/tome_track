@@ -108,6 +108,9 @@ def other_book(db, user, author, tag) -> Book:
 def userbook(db, user, book) -> UserBook:
     return UserBook.objects.create(user=user, book=book, status=ReadingStatus.READING)
 
+@pytest.fixture
+def comic_book(db, user, author, tag):
+    return Book.objects.create(title='Test Comic', book_type='comic')
 
 @pytest.fixture(autouse=True)
 def clear_cache():
@@ -138,7 +141,6 @@ def test_list_returns_only_own_items(api_client, user, other_user, book, userboo
     # make sure another user's record is not leaked
     UserBook.objects.create(user=other_user, book=book, status=ReadingStatus.READING)
     second = api_client.get(USERBOOKS_URL)
-    data = second.json()
     results2 = second.data.get('results', second.data)
     assert len(results2) == 1
 
@@ -184,17 +186,16 @@ def test_cannot_create_duplicate_book(api_client, user, book):
     response2 = api_client.post(USERBOOKS_URL, payload, format='json')
     assert response2.status_code == status.HTTP_400_BAD_REQUEST
 
-def test_masterpiece_only_if_completed(api_client, user, book, userbook):
+def test_masterpiece_only_if_completed(api_client, user, other_book, userbook, comic_book):
     api_client.force_authenticate(user=user)
     # create
     for reading_status in ReadingStatus:
         if reading_status == ReadingStatus.COMPLETED:
             continue
 
-        payload = {'book': book.pk, 'status': reading_status, 'is_masterpiece': True}
+        payload = {'book': other_book.pk, 'status': reading_status, 'is_masterpiece': True}
         response = api_client.post(USERBOOKS_URL, payload, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-
     # update
     for reading_status in ReadingStatus:
         if reading_status == ReadingStatus.COMPLETED:
@@ -202,6 +203,10 @@ def test_masterpiece_only_if_completed(api_client, user, book, userbook):
         payload = {'is_masterpiece': True, 'status': reading_status}
         response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    payload = {'book': comic_book.pk, 'status': ReadingStatus.READING, 'current_page': 10}
+    response = api_client.post(USERBOOKS_URL, payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 def test_current_page_only_for_books(api_client, user, other_book, userbook):
     api_client.force_authenticate(user=user)

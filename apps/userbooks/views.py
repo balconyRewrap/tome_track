@@ -36,14 +36,15 @@ def userbook_cache_key(
     view_method: Callable,
     request: Request,
     *args: Any,  # noqa: ARG001
-    **kwargs: Any,  # noqa: ARG001
+    **kwargs: Any,
 ) -> str:
     """Return a cache key for userbooks list and detail views, based on user ID and view method.
 
     Returns:
         str: The cache key for the userbooks list or detail view.
     """
-    return f"userbooks:user:{request.user.pk}:{view_method.__name__}"
+    pk = kwargs.get('pk', '')
+    return f"userbooks:user:{request.user.pk}:{view_method.__name__}:{pk}"
 
 
 @extend_schema_view(
@@ -146,8 +147,7 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
             and isinstance(self.request.user, User)
             and self.request.user.role == 'admin'
         ):
-            return UserBook.objects.all()
-
+            return UserBook.objects.select_related('book', 'user').all().order_by('id')
         return UserBook.objects.filter(user=self.request.user).order_by('id')
 
     # pyright is ignored, because cache_response decorator changes the signature of the method
@@ -187,8 +187,8 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 
     def perform_destroy(self, instance: UserBook) -> None:
         """Delete a UserBook, invalidate cache."""
+        super().perform_destroy(instance)
         self._invalidate_userbooks_cache()
-        return super().perform_destroy(instance)
 
     def _invalidate_userbooks_cache(self) -> None:
         """Helper to invalidate userbooks cache."""
