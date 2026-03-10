@@ -27,16 +27,6 @@ def get_token(api_client, user):
         return response.data["access"]
     return _get_token
 
-# def test_change_email_same_email(api_client, user, get_token):
-#     cache.clear()
-#     token = get_token(user.email, "StrongPass123")
-#     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
-
-#     url = reverse("change_email")
-#     response = api_client.post(url, {"new_email": user.email, "password": "StrongPass123"}, format="json")
-#     assert response.status_code == status.HTTP_400_BAD_REQUEST
-#     assert "new_email" in response.data['error']['details']
-
 def test_admin_functions_not_admin(api_client, user, get_token):
     cache.clear()
     token = get_token(user.email, "StrongPass123")
@@ -58,8 +48,6 @@ def test_admin_list_users(api_client, admin_user, get_token):
     url = reverse("admin_users")
     response = api_client.get(url)
     assert response.status_code == status.HTTP_200_OK
-    print(response.data['results'])
-    print(type(response.data['results']))
     assert isinstance(response.data['results'], list)
     assert any(u["email"] == admin_user.email for u in response.data['results'])
 
@@ -80,20 +68,20 @@ def test_admin_invalid_user(api_client, admin_user, user, get_token):
     admin_token = get_token(admin_user.email, "StrongPass123")
     user_token = get_token(user.email, "StrongPass123")
 
-    # Проверяем, что user активен и токен работает
+    # check if user is valid and active
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {user_token}")
     auth_url = reverse('auth_check')
     response = api_client.get(auth_url)
     assert response.status_code == status.HTTP_200_OK
 
-    # Деактивируем user через admin
+    # deactivate user
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {admin_token}")
     url = reverse("admin_user_detail", kwargs={"pk": user.id})
     response = api_client.patch(url, {"is_active": False}, format="json")
     assert response.status_code == status.HTTP_200_OK
     assert response.data["is_active"] is False
 
-    # Проверяем, что токен user теперь не работает
+    # check if user not working
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {user_token}")
     response = api_client.get(auth_url)
     assert response.status_code == status.HTTP_401_UNAUTHORIZED

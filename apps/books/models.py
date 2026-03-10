@@ -3,7 +3,6 @@ from typing import Any, Final
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
-from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils.text import slugify
 
@@ -125,32 +124,3 @@ class Book(TimestampedModel):
             models.Index(fields=['book_type']),
             models.Index(fields=['country']),
         ]
-
-    def clean(self) -> None:
-        """Custom validation to enforce business rules on the Book model.
-
-        Raises:
-            ValidationError: If the book has more than the allowed number of authors or tags,
-                             or if a duplicate book with the same title and authors exists.
-        """
-        super().clean()
-        if not self.pk:
-            return
-
-        if self.authors.count() > AUTHOR_MAX_COUNT:
-            raise ValidationError({'authors': f'A book can have at most {AUTHOR_MAX_COUNT} authors.'})
-
-        if self.tags.count() > TAG_MAX_COUNT:
-            raise ValidationError({'tags': f'A book can have at most {TAG_MAX_COUNT} tags.'})
-
-        author_ids = frozenset(self.authors.values_list('id', flat=True))
-        duplicate = (
-            Book.objects.exclude(pk=self.pk)
-            .filter(title=self.title)
-            .prefetch_related('authors')
-        )
-        for book in duplicate:
-            if frozenset(book.authors.values_list('id', flat=True)) == author_ids:
-                raise ValidationError(
-                    'A book with this title and the same set of authors already exists.',
-                )

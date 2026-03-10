@@ -81,6 +81,20 @@ def book(db, user, author, tag) -> Book:
     b.tags.set([tag])
     return b
 
+@pytest.fixture
+def comic(db, user, author, tag) -> Book:
+    b = Book.objects.create(
+        title='Test Book',
+        title_en='Test Book EN',
+        description='A test book.',
+        book_type='comic',
+        pages_total=300,
+        country='US',
+        user=user,
+    )
+    b.authors.set([author])
+    b.tags.set([tag])
+    return b
 
 @pytest.fixture(autouse=True)
 def clear_cache():
@@ -384,10 +398,13 @@ def test_update_book_not_found_returns_404(api_client, user, author, tag):
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
 
-def test_update_book_invalid_data_returns_400(api_client, user, book, author):
+def test_update_book_invalid_data_returns_400(api_client, user, book, comic, author):
     """PUT with missing required fields returns 400."""
     api_client.force_authenticate(user=user)
-    response = api_client.put(books_detail_url(book.pk), {'title': ''}, format='json')
+    response = api_client.put(books_detail_url(book.pk), {'pages_total': None}, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    response = api_client.put(books_detail_url(comic.pk), {'chapters_total': None}, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
@@ -462,7 +479,11 @@ def test_partial_update_book_invalid_field_value_returns_400(api_client, user, b
     response = api_client.patch(books_detail_url(book.pk), {'book_type': 'invalid'}, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-
+def test_partial_update_book_invalid_pages_total_or_chapter_total_value_returns_400(api_client, user, book):
+    """PATCH with an invalid value for a field returns 400."""
+    api_client.force_authenticate(user=user)
+    response = api_client.patch(books_detail_url(book.pk), {'pages_total': None}, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 # DESTROY  DELETE /api/v1/books/<pk>/
 

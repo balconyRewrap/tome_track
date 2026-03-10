@@ -39,17 +39,19 @@ weak_password_data = {
     "password_confirm": "12345678",
 }
 
+@pytest.mark.throttle
 def test_register_throttle(api_client, db):
     """More than 10 registration attempts from the same IP within an hour should be throttled."""
     cache.clear()
     throttle_remote_addr = '127.0.0.11'
+
     for i in range(10):
         data = valid_data.copy()
         data["email"] = f"user{i}@example.com"
         data["username"] = f"user{i}"
         response = api_client.post(REGISTER_URL, data, REMOTE_ADDR=throttle_remote_addr)
-        print(response.data)
         assert response.status_code in [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST]
+        client = cache.client.get_client()  # pyright: ignore[reportAttributeAccessIssue]
     # 11th request should be throttled
     data = valid_data.copy()
     data["email"] = "user29@example.com"
@@ -57,6 +59,7 @@ def test_register_throttle(api_client, db):
     response = api_client.post(REGISTER_URL, data, REMOTE_ADDR=throttle_remote_addr)
     assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
+@pytest.mark.throttle
 def test_login_throttle(api_client, db):
     """More than 5 login attempts with wrong credentials from the same IP within a minute should be throttled."""
     throttle_remote_addr = '127.0.0.4'

@@ -279,7 +279,6 @@ def test_search_q_combined_with_book_type_filter(api_client, book, comic_book):
 def test_search_invalid_book_type_returns_400(api_client, book):
     """An invalid book_type value causes a 400 response from the filter."""
     response = api_client.get(SEARCH_URL, {'book_type': 'magazine'})
-    print(response.data)
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 

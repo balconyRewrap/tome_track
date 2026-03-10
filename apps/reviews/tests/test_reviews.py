@@ -157,13 +157,6 @@ def other_user_private_review(db, other_user, other_book) -> Review:
     )
 
 
-@pytest.fixture(autouse=True)
-def clear_cache():
-    cache.clear()
-    yield
-    cache.clear()
-
-
 def _review_payload(**overrides) -> dict:
     payload = {
         'name': 'My Review',
@@ -179,7 +172,6 @@ def _review_payload(**overrides) -> dict:
 class TestReviewList:
     def test_anonymous_can_list_public_reviews(self, api_client, book, review):
         response = api_client.get(reviews_url(book.pk))
-        print(response.data)
         assert response.status_code == status.HTTP_200_OK
 
     def test_list_returns_only_public_reviews_for_anonymous(self, api_client, book, review, other_user_private_review):
@@ -335,7 +327,6 @@ class TestReviewRetrieve:
     def test_owner_can_retrieve_own_private_review(self, api_client, user, other_book, private_review):
         api_client.force_authenticate(user=user)
         response = api_client.get(review_detail_url(other_book.pk, private_review.pk))
-        print(response.data)
         assert response.status_code == status.HTTP_200_OK
 
     def test_other_user_cannot_retrieve_private_review(self, api_client, other_user, book, private_review):
@@ -397,11 +388,8 @@ class TestReviewPartialUpdate:
         assert response.data['is_public'] is False
 
     def test_admin_can_update_any_review(self, api_client, admin_user, book, review):
-        print(admin_user.username)
-        print(admin_user.is_staff)
         api_client.force_authenticate(user=admin_user)
         response = api_client.patch(review_detail_url(book.pk, review.pk), {'name': 'Admin edit'}, format='json')
-        print(response.data)
         assert response.status_code == status.HTTP_200_OK
         assert response.data['name'] == 'Admin edit'
 

@@ -12,6 +12,10 @@ def user(db):
     return User.objects.create_user(email="user@example.com", username="user1", password="StrongPass123")
 
 @pytest.fixture
+def other_user(db):
+    return User.objects.create_user(email="user2@example.com", username="user2", password="StrongPass123")
+
+@pytest.fixture
 def api_client():
     return APIClient()
 
@@ -33,6 +37,15 @@ def test_change_email_same_email(api_client, user, get_token):
     assert response.status_code == status.HTTP_400_BAD_REQUEST
     assert "new_email" in response.data['error']['details']
 
+def test_change_email_to_foreign_email(api_client, user, other_user, get_token):
+    cache.clear()
+    token = get_token(user.email, "StrongPass123")
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+    url = reverse("change_email")
+    response = api_client.post(url, {"new_email": other_user.email, "password": "StrongPass123"}, format="json")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "new_email" in response.data['error']['details']
+
 def test_change_email_invalid_password(api_client, user, get_token):
     token = get_token(user.email, "StrongPass123")
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
@@ -40,8 +53,9 @@ def test_change_email_invalid_password(api_client, user, get_token):
     url = reverse("change_email")
     response = api_client.post(url, {"new_email": "newemail@example.com", "password": "WrongPass123"}, format="json")
     assert response.status_code == status.HTTP_400_BAD_REQUEST
-    print(response.data)
     assert "password" in response.data['error']['details']
+
+
 
 def test_change_email_token_version(api_client, user, get_token):
     # get access token
@@ -63,5 +77,4 @@ def test_change_email_token_version(api_client, user, get_token):
 
     # Now the request works again
     response = api_client.post(url, {"new_email": "another@example.com", "password": "StrongPass123"}, format="json")
-    print(response.data)
     assert response.status_code == status.HTTP_200_OK

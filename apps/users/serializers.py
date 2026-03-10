@@ -67,8 +67,6 @@ class RegisterSerializer(serializers.Serializer):
             validate_password(value)
         except ValidationError as e:
             raise serializers.ValidationError("Password is too weak.") from e
-        if value.isdigit():
-            raise serializers.ValidationError("Password must contain both letters and numbers.")
         return value
 
     def create(self, validated_data: dict) -> AbstractUser:  # noqa: PLR6301
@@ -112,7 +110,9 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         """
         data = super().validate(attrs)
         # User has it, but pylance doesn't recognize it, so we ignore the type errors here
-        if not self.user.is_active:  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
+        if not self.user:
+            raise serializers.ValidationError("Unable to log in with provided credentials.")
+        if not self.user.is_active:
             raise serializers.ValidationError("User account is disabled.")
         data["user_id"] = self.user.id  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
         data["email"] = self.user.email  # pyright: ignore[reportOptionalMemberAccess, reportAttributeAccessIssue]
@@ -135,20 +135,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = ['id', 'email', 'username', 'role']
         read_only_fields = ['id', 'email', 'role']
-
-    def validate_username(self, value: str) -> str:
-        """Validate that the username is unique.
-
-        Returns:
-            str: The validated username.
-
-        Raises:
-            serializers.ValidationError: If a user with the given username already exists.
-        """
-        user = self.context['request'].user
-        if User.objects.exclude(pk=user.pk).filter(username=value).exists():
-            raise serializers.ValidationError("User with this username already exists.")
-        return value
 
 
 class ChangeEmailSerializer(serializers.Serializer):
@@ -215,8 +201,6 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             validate_password(value)
         except ValidationError as e:
             raise serializers.ValidationError("Password is too weak.") from e
-        if value.isdigit():
-            raise serializers.ValidationError("Password must contain both letters and numbers.")
         return value
 
 
@@ -239,8 +223,6 @@ class PasswordChangeSerializer(serializers.Serializer):
             validate_password(value)
         except ValidationError as e:
             raise serializers.ValidationError("Password is too weak.") from e
-        if value.isdigit():
-            raise serializers.ValidationError("Password must contain both letters and numbers.")
         return value
 
     def validate(self, attrs: dict) -> dict:
