@@ -1,4 +1,5 @@
-from .base import *
+"""Settings for production."""
+from .base import *  # noqa: F403
 
 DEBUG = False
 ALLOWED_HOSTS = ['yourdomain.com']

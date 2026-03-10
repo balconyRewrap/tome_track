@@ -63,4 +63,5 @@ def test_change_email_token_version(api_client, user, get_token):
 
     # Now the request works again
     response = api_client.post(url, {"new_email": "another@example.com", "password": "StrongPass123"}, format="json")
+    print(response.data)
     assert response.status_code == status.HTTP_200_OK

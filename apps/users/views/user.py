@@ -220,8 +220,7 @@ class PasswordResetView(GenericAPIView):
     The user provides their email, and if it exists, a password reset token is generated and emailed to them.
     """
 
-    # TODO: make Any after implementing email sending
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     serializer_class = PasswordResetSerializer
 
     # TODO: change the post after implementing email sending to not return the token in response

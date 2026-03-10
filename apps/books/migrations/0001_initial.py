@@ -51,7 +51,7 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('title', models.CharField(max_length=500)),
                 ('title_en', models.CharField(max_length=500)),
-                ('cover', models.ImageField(blank=True, null=True, upload_to='covers/', validators=[apps.common.validators.validate_cover_image])),
+                ('cover', models.ImageField(blank=True, null=True, upload_to='covers/', validators=[apps.common.validators.validate_model_cover_image])),
                 ('description', models.TextField(max_length=5000)),
                 ('book_type', models.CharField(choices=[('book', 'Book'), ('comic', 'Comic')], default='book', max_length=20)),
                 ('country', models.CharField(default='Unknown', max_length=100)),

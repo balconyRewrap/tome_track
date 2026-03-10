@@ -6,7 +6,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 
-@extend_schema(tags=['Testing'])
+@extend_schema(exclude=True)
 class GetCacheView(GenericAPIView):  # noqa: D101
     permission_classes = [AllowAny]
 

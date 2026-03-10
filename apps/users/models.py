@@ -67,14 +67,14 @@ class UserManager(BaseUserManager):
 class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     """Custom user model for the Tome Track application.
 
-    Fields:
-    - email: Unique email address for authentication.
-    - username: Unique username for display purposes.
-    - role: User role, either 'user' or 'admin'.
-    - is_active: Boolean indicating if the user account is active.
-    - is_staff: Boolean indicating if the user can access the admin site.
-    - created_at: Timestamp when the user was created (inherited from TimestampedModel).
-    - updated_at: Timestamp when the user was last updated (inherited from TimestampedModel
+    Attributes:
+        email (str): Unique email address for authentication.
+        username (str): Unique username for display purposes.
+        role (UserRole): User role, either 'user' or 'admin'.
+        is_active (bool): Boolean indicating if the user account is active.
+        is_staff (bool): Boolean indicating if the user is admin or not.
+        created_at (DateTimeField): Timestamp when the user was created (inherited from TimestampedModel).
+        updated_at (DateTimeField): Timestamp when the user was last updated (inherited from TimestampedModel).
     """
 
     email = models.EmailField(unique=True)
@@ -91,7 +91,15 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
 
 
 class PasswordResetToken(TimestampedModel):
-    """Model for storing password reset tokens."""
+    """Model for storing password reset tokens.
+
+    Attributes:
+        user (User): The user associated with the password reset token.
+        token (str): The unique token used for password reset.
+        used (bool): Indicates whether the token has been used.
+        created_at (DateTimeField): Timestamp when the token was created (inherited from TimestampedModel).
+        updated_at (DateTimeField): Timestamp when the token was last updated (inherited from TimestampedModel).
+    """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_tokens')
     token = models.CharField(max_length=255, unique=True)
