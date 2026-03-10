@@ -62,10 +62,6 @@ class UserBookWriteSerializer(UserBookSerializer):
         current_page = attrs.get('current_page')
         book = attrs.get('book')
         rating = attrs.get('rating')
-        if self.partial and 'book' in attrs:
-            raise serializers.ValidationError(
-                'Book cannot be changed.',
-            )
         if not self.partial and not book:
             raise serializers.ValidationError(
                 'Book is required.',
@@ -118,3 +114,27 @@ class UserBookUpdateSerializer(UserBookWriteSerializer):
             'updated_at',
         ]
         extra_kwargs = UserBookSerializer.Meta.extra_kwargs
+
+    def validate(self, attrs: dict) -> dict:
+        """In update no book is given in response, so we need additional check.
+
+        Args:
+            attrs (dict): attrs of response
+
+        Returns:
+            attrs (dict): validated attrs of response
+
+        Raises:
+            serializers.ValidationError: if any check fails
+        """
+        if not self.instance:
+            raise serializers.ValidationError(
+                "You try to update not existed User Book.",
+            )
+        book = self.instance.book
+        current_page = attrs.get('current_page')
+        if current_page and book and book.pages_total and current_page > book.pages_total:
+            raise serializers.ValidationError(
+                'Current page cannot be greater than total pages of the book.',
+            )
+        return super().validate(attrs)

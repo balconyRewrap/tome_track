@@ -34,4 +34,4 @@ def test_validate_serializer_name_invalid_characters():
 
 def test_validate_serializer_name_control_characters():
     with pytest.raises(Exception):
-        validate_serializer_name("Invalid\x01Name")
+        validate_serializer_name("Hello\tWorld")

@@ -157,13 +157,6 @@ def other_user_private_review(db, other_user, other_book) -> Review:
     )
 
 
-@pytest.fixture(autouse=True)
-def clear_cache():
-    cache.clear()
-    yield
-    cache.clear()
-
-
 def _review_payload(**overrides) -> dict:
     payload = {
         'name': 'My Review',

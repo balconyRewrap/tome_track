@@ -238,6 +238,7 @@ class PasswordResetView(GenericAPIView):
         if user:
             token = uuid.uuid4().hex
             PasswordResetToken.objects.create(user=user, token=token, created_at=timezone.now(), used=False)
+            # TODO: return lower response always, send token by email
             return Response({"reset_token": token}, status=status.HTTP_200_OK)
         return Response(
             {"detail": "If an account with that email exists, a password reset link has been sent."},

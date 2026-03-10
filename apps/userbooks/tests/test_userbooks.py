@@ -89,6 +89,20 @@ def book(db, user, author, tag) -> Book:
     b.tags.set([tag])
     return b
 
+@pytest.fixture
+def other_book(db, user, author, tag) -> Book:
+    b = Book.objects.create(
+        title='Another Book',
+        title_en='Test Book EN',
+        description='A test book.',
+        book_type='book',
+        pages_total=300,
+        country='US',
+        user=user,
+    )
+    b.authors.set([author])
+    b.tags.set([tag])
+    return b
 
 @pytest.fixture
 def userbook(db, user, book) -> UserBook:
@@ -159,6 +173,80 @@ def test_create_requires_auth(api_client, book):
     response = api_client.post(USERBOOKS_URL, {'book': book.pk, 'status': ReadingStatus.READING}, format='json')
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
+def test_cannot_create_without_book(api_client, user):
+    api_client.force_authenticate(user=user)
+    response = api_client.post(USERBOOKS_URL, {'status': ReadingStatus.READING}, format='json')
+    print(response.data)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+def test_cannot_create_duplicate_book(api_client, user, book):
+    api_client.force_authenticate(user=user)
+    payload = {'book': book.pk, 'status': ReadingStatus.READING}
+    response1 = api_client.post(USERBOOKS_URL, payload, format='json')
+    assert response1.status_code == status.HTTP_201_CREATED
+    response2 = api_client.post(USERBOOKS_URL, payload, format='json')
+    assert response2.status_code == status.HTTP_400_BAD_REQUEST
+
+def test_masterpiece_only_if_completed(api_client, user, book, userbook):
+    api_client.force_authenticate(user=user)
+    # create
+    for reading_status in ReadingStatus:
+        if reading_status == ReadingStatus.COMPLETED:
+            continue
+
+        payload = {'book': book.pk, 'status': reading_status, 'is_masterpiece': True}
+        response = api_client.post(USERBOOKS_URL, payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    # update
+    for reading_status in ReadingStatus:
+        if reading_status == ReadingStatus.COMPLETED:
+            continue
+        payload = {'is_masterpiece': True, 'status': reading_status}
+        response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+def test_current_page_only_for_books(api_client, user, other_book, userbook):
+    api_client.force_authenticate(user=user)
+    # create
+    payload = {'book': other_book.pk, 'status': ReadingStatus.READING, 'current_page': 10}
+    response = api_client.post(USERBOOKS_URL, payload, format='json')
+    assert response.status_code == status.HTTP_201_CREATED
+
+    # update - should be allowed to set current_page for existing record
+    payload = {'current_page': 20}
+    response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
+    assert response.status_code == status.HTTP_200_OK
+
+def test_current_page_cannot_exceed_total(api_client, user, book, userbook):
+    api_client.force_authenticate(user=user)
+    # create
+    payload = {'book': book.pk, 'status': ReadingStatus.READING, 'current_page': book.pages_total + 1}
+    response = api_client.post(USERBOOKS_URL, payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    # update
+    payload = {'current_page': book.pages_total + 1}
+    response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
+    print(response.data)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+def test_rating_constraints(api_client, user, book, userbook):
+    api_client.force_authenticate(user=user)
+    # create with invalid rating
+    payload = {'book': book.pk, 'status': ReadingStatus.READING, 'rating': 11}
+    response = api_client.post(USERBOOKS_URL, payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    # update with invalid rating
+    payload = {'rating': -1}
+    response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    # update with plan_to_read status and rating
+    payload = {'status': ReadingStatus.PLAN_TO_READ, 'rating': 5}
+    response = api_client.patch(userbook_detail_url(userbook.pk), payload, format='json')
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 # ---------------------------------------------------------------------------
 # caching behaviour
@@ -180,7 +268,7 @@ def test_destroy_forbidden_for_non_owner(api_client, other_user, userbook):
     response = api_client.delete(userbook_detail_url(userbook.pk))
     assert response.status_code == status.HTTP_404_NOT_FOUND
 
-
+@pytest.mark.throttle
 def test_list_endpoint_is_cached(api_client, user, book):
     api_client.force_authenticate(user=user)
     # prime cache with a single record

@@ -25,7 +25,6 @@ from apps.books.views import (
     BookViewSet,
     TagViewSet,
 )
-from apps.common.views import GetCacheView
 from apps.reviews.views import ReviewViewSet, UserMeReviewsView
 from apps.userbooks.views import UserBookViewSet
 from apps.users.views.admin import (
@@ -151,7 +150,6 @@ urlpatterns += [
 # testing views:
 urlpatterns += [
     path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
-    path('api/v1/testing/cache', GetCacheView.as_view(), name='get_cache'),
 ]
 
 # debug

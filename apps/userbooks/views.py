@@ -17,6 +17,7 @@ from apps.common.permissions import IsOwnerOrAdmin
 from apps.userbooks.filters import UserBookFilter
 from apps.userbooks.models import UserBook
 from apps.userbooks.serializers import UserBookSerializer, UserBookUpdateSerializer, UserBookWriteSerializer
+from apps.users.models import User
 
 USERBOOKS_CACHE_TTL = getattr(settings, 'USERBOOKS_CACHE_TTL', 60 * 60)
 USERBOOKS_DETAIL_CACHE_TTL = getattr(settings, 'USERBOOKS_DETAIL_CACHE_TTL', 60 * 120)
@@ -140,7 +141,11 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         Returns:
             QuerySet: the queryset of UserBook objects for the current user or all if admin.
         """
-        if self.request.user.is_authenticated and self.request.user.role == 'admin':
+        if (
+            self.request.user.is_authenticated
+            and isinstance(self.request.user, User)
+            and self.request.user.role == 'admin'
+        ):
             return UserBook.objects.all()
 
         return UserBook.objects.filter(user=self.request.user).order_by('id')

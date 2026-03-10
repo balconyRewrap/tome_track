@@ -18,6 +18,7 @@ from apps.common.mixins import ActionPermissionsMixin
 from apps.common.permissions import IsOwnerOrAdmin
 from apps.reviews.models import Review
 from apps.reviews.serializers import ReviewSerializer, ReviewWriteSerializer
+from apps.users.models import User
 
 REVIEWS_CACHE_TTL = getattr(settings, 'REVIEWS_CACHE_TTL', 60 * 5)  # 5 minutes
 REVIEWS_DETAIL_CACHE_TTL = getattr(settings, 'REVIEWS_DETAIL_CACHE_TTL', 60 * 60)  # 1 hour
@@ -175,7 +176,11 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 
         # If the user is staff, they can see all reviews.
         # if user.is_authenticated, he has role.
-        if self.request.user.is_authenticated and self.request.user.role == 'admin':
+        if (
+            self.request.user.is_authenticated
+            and isinstance(self.request.user, User)
+            and self.request.user.role == 'admin'
+        ):
             qs = Review.objects.select_related('user', 'book').all()
         # If authenticated, they can see public reviews and their own reviews.
         elif self.request.user.is_authenticated:

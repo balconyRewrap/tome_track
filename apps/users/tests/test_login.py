@@ -96,3 +96,9 @@ def test_refresh_rotation(api_client, user, db):
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     response = api_client.post(REFRESH_URL, {"refresh": new_refresh})
     assert response.status_code == status.HTTP_200_OK
+
+def test_login_inactive_user(api_client, user, db):
+    user.is_active = False
+    user.save()
+    response = api_client.post(LOGIN_URL, login_data)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
