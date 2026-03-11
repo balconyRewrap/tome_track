@@ -120,12 +120,6 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         return data
 
 
-class LogoutSerializer(serializers.Serializer):
-    """Serializer for user logout."""
-
-    refresh = serializers.CharField()
-
-
 class UserProfileSerializer(serializers.ModelSerializer):
     """Serializer for user profile."""
 
