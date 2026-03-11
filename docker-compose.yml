@@ -11,7 +11,7 @@ services:
       - ./logs:/app/logs
       - static_volume:/app/staticfiles
     env_file:
-      - .env_production
+      - .env.production
     depends_on:
       - db
       - redis
@@ -31,23 +31,23 @@ services:
 
   celery_worker:
     build: .
-    command: celery -A config worker -l warning
+    command: celery -A config worker -l info
     volumes:
       - .:/app
       - ./logs:/app/logs
     env_file:
-      - .env_production
+      - .env.production
     depends_on:
       - db
       - redis
 
   celery_beat:
     build: .
-    command: celery -A config beat -l warning --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - .:/app
     env_file:
-      - .env_production
+      - .env.production
     depends_on:
       - db
       - redis
@@ -80,4 +80,3 @@ services:
 volumes:
   pg_data:
   redis_data:
-  static_volume:
