@@ -49,6 +49,7 @@ class UserAdmin(BaseUserAdmin):
             request (HttpRequest): The request object.
             queryset (QuerySet[User]): The queryset of users to deactivate.
         """
-        queryset = queryset.exclude(id=request.user.id)
+        # user has id, it goes from admin panel, so it is safe to exclude the user itself from deactivation
+        queryset = queryset.exclude(id=request.user.id)  # pyright: ignore[reportAttributeAccessIssue]
         updated = queryset.update(is_active=False)
         self.message_user(request, f"Users deactivated: {updated}")

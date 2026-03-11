@@ -48,7 +48,9 @@ def _make_token(user, *, hours_ago: int = 0, used: bool = False) -> PasswordRese
 )
 def test_send_password_reset_email_sends_email():
     """Task delivers exactly one email to the correct recipient."""
-    send_password_reset_email.apply(args=[EMAIL, TOKEN])
+    # pyright don't understand that Celery's eager test mode runs tasks synchronously
+    # and re-raises exceptions, so we have to ignore the reportCallIssue here
+    send_password_reset_email.apply(args=[EMAIL, TOKEN])  # pyright: ignore[reportCallIssue]
 
     assert len(mail.outbox) == 1
     sent = mail.outbox[0]
@@ -63,7 +65,7 @@ def test_send_password_reset_email_sends_email():
 )
 def test_send_password_reset_email_subject():
     """Task uses 'Password Reset Request' as the email subject."""
-    send_password_reset_email.apply(args=[EMAIL, TOKEN])
+    send_password_reset_email.apply(args=[EMAIL, TOKEN])  # pyright: ignore[reportCallIssue]
 
     assert mail.outbox[0].subject == "Password Reset Request"
 
@@ -75,13 +77,13 @@ def test_send_password_reset_email_subject():
 )
 def test_send_password_reset_email_url_in_body():
     """Both the plain-text and HTML bodies contain the correct reset URL."""
-    send_password_reset_email.apply(args=[EMAIL, TOKEN])
+    send_password_reset_email.apply(args=[EMAIL, TOKEN])  # pyright: ignore[reportCallIssue]
 
     expected_url = f"http://localhost:3000/reset-password?token={TOKEN}"
     sent = mail.outbox[0]
     assert expected_url in sent.body
     # html_message is stored in alternatives as (content, mime_type)
-    html_body = sent.alternatives[0][0]
+    html_body = sent.alternatives[0][0]  # pyright: ignore[reportAttributeAccessIssue]
     assert expected_url in html_body
 
 
@@ -93,7 +95,7 @@ def test_send_password_reset_email_url_in_body():
 def test_send_password_reset_email_retries_on_smtp_failure():
     """Task exhausts all retries and fails when send_mail always raises."""
     with patch("apps.users.tasks.send_mail", side_effect=Exception("SMTP connection failed")):
-        result = send_password_reset_email.apply(args=[EMAIL, TOKEN])
+        result = send_password_reset_email.apply(args=[EMAIL, TOKEN])  # pyright: ignore[reportCallIssue]
 
     assert result.failed()
     # In eager (test) mode Celery re-raises the original exception rather than MaxRetriesExceededError
@@ -116,7 +118,7 @@ def test_send_password_reset_email_succeeds_after_transient_failure():
             raise Exception("Transient SMTP error")
 
     with patch("apps.users.tasks.send_mail", side_effect=flaky_send_mail):
-        result = send_password_reset_email.apply(args=[EMAIL, TOKEN])
+        result = send_password_reset_email.apply(args=[EMAIL, TOKEN])  # pyright: ignore[reportCallIssue]
 
     assert result.successful()
     assert call_count == 2  # failed once, succeeded on retry
@@ -129,7 +131,7 @@ def test_send_password_reset_email_succeeds_after_transient_failure():
 @pytest.mark.django_db
 def test_cleanup_returns_zero_when_no_tokens(user):
     """Returns 0 and leaves the table untouched when there is nothing to delete."""
-    count = cleanup_expired_reset_tokens.apply().get()
+    count = cleanup_expired_reset_tokens.apply().get()  # pyright: ignore[reportFunctionMemberAccess]
     assert count == 0
 
 
@@ -140,7 +142,7 @@ def test_cleanup_deletes_only_expired_tokens(user):
     expired_1 = _make_token(user, hours_ago=2)
     expired_2 = _make_token(user, hours_ago=24)
 
-    count = cleanup_expired_reset_tokens.apply().get()
+    count = cleanup_expired_reset_tokens.apply().get()  # pyright: ignore[reportFunctionMemberAccess]
 
     assert count == 2
     assert PasswordResetToken.objects.filter(pk=fresh.pk).exists()
@@ -153,7 +155,7 @@ def test_cleanup_deletes_used_expired_tokens(user):
     """Used tokens that are also expired are deleted, not preserved."""
     used_expired = _make_token(user, hours_ago=3, used=True)
 
-    count = cleanup_expired_reset_tokens.apply().get()
+    count = cleanup_expired_reset_tokens.apply().get()  # pyright: ignore[reportFunctionMemberAccess]
 
     assert count == 1
     assert not PasswordResetToken.objects.filter(pk=used_expired.pk).exists()
@@ -164,7 +166,7 @@ def test_cleanup_preserves_all_fresh_tokens(user):
     """No tokens are deleted when all of them are within the 1-hour window."""
     _make_token(user, hours_ago=0)
 
-    count = cleanup_expired_reset_tokens.apply().get()
+    count = cleanup_expired_reset_tokens.apply().get()  # pyright: ignore[reportFunctionMemberAccess]
 
     assert count == 0
     assert PasswordResetToken.objects.count() == 1

@@ -46,6 +46,8 @@ jsonschema==4.26.0
     # via drf-spectacular
 jsonschema-specifications==2025.9.1
     # via jsonschema
+gunicorn==23.0.0
+    # via tome-track (pyproject.toml)
 pillow==12.1.1
     # via tome-track (pyproject.toml)
 psycopg==3.3.3

@@ -273,7 +273,17 @@ LOGGING = {
         },
         'apps': {
             'handlers': ['file', 'console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+        },
+        'django.security': {
+            'handlers': ['file', 'console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['file', 'console'],
+            'level': 'WARNING',
+            'propagate': False,
         },
     },
 }
@@ -294,7 +304,7 @@ SPECTACULAR_SETTINGS = {
 ADMIN_SITE_HEADER = "Book Tracker Admin"
 ADMIN_SITE_TITLE = "Book Tracker Admin"
 ADMIN_INDEX_TITLE = "Book Tracker Administration"
-ALLOWED_ADMIN_IPS = ['127.0.0.1', '172.19.0.1', '172.18.0.1']  # Add my local IP address here
+ALLOWED_ADMIN_IPS = env.list('ALLOWED_ADMIN_IPS', default=['127.0.0.1'])  # pyright: ignore[reportArgumentType]
 
 # static
 STATIC_URL = 'static/'
