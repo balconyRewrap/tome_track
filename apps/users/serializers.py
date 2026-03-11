@@ -185,7 +185,6 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
     """Serializer for confirming a password reset."""
 
     token = serializers.CharField()
-    old_password = serializers.CharField(write_only=True, required=False)
     new_password = serializers.CharField(write_only=True, min_length=8)
 
     def validate_new_password(self, value: str) -> str:  # noqa: PLR6301

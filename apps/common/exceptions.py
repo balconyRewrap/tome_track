@@ -51,11 +51,15 @@ def custom_exception_handler(exc: Exception, context: dict) -> Response | None:
     """
     response = exception_handler(exc, context)
     if response is not None and response.data is not None:
+        message = 'Error'
+        if isinstance(response.data, dict):
+            message = response.data.get('detail', 'Error')
+        elif isinstance(response.data, list):
+            message = response.data[0] if response.data else 'Error'
         response.data = {
             "error": {
                 "code": response.status_code,
-                # TODO: fall if data - list
-                "message": response.data.get('detail', 'Error'),
+                "message": message,
                 "details": response.data,
             },
         }

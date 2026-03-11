@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
@@ -91,7 +92,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -158,6 +159,30 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])  # pyright: ignore[reportArgumentType]
+
+# Frontend
+FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')  # pyright: ignore[reportArgumentType]
+
+# Email
+EMAIL_BACKEND = env('EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend')  # pyright: ignore[reportArgumentType]
+EMAIL_HOST = env('EMAIL_HOST', default='smtp.gmail.com')  # pyright: ignore[reportArgumentType]
+EMAIL_PORT = env.int('EMAIL_PORT', default=587)
+EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
+EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')  # pyright: ignore[reportArgumentType]
+EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')  # pyright: ignore[reportArgumentType]
+DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@example.com')  # pyright: ignore[reportArgumentType]
+
+# Celery
+CELERY_BROKER_URL = env('REDIS_URL')
+CELERY_RESULT_BACKEND = env('REDIS_URL')
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_BEAT_SCHEDULE = {
+    'cleanup-expired-reset-tokens': {
+        'task': 'apps.users.tasks.cleanup_expired_reset_tokens',
+        'schedule': timedelta(hours=6),
+    },
+}
 CORS_ALLOWED_CREDENTIALS = True
 
 # Throttle rates
@@ -248,7 +273,17 @@ LOGGING = {
         },
         'apps': {
             'handlers': ['file', 'console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+        },
+        'django.security': {
+            'handlers': ['file', 'console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'celery': {
+            'handlers': ['file', 'console'],
+            'level': 'WARNING',
+            'propagate': False,
         },
     },
 }
@@ -269,7 +304,7 @@ SPECTACULAR_SETTINGS = {
 ADMIN_SITE_HEADER = "Book Tracker Admin"
 ADMIN_SITE_TITLE = "Book Tracker Admin"
 ADMIN_INDEX_TITLE = "Book Tracker Administration"
-ALLOWED_ADMIN_IPS = ['127.0.0.1', '172.19.0.1', '172.18.0.1']  # Add my local IP address here
+ALLOWED_ADMIN_IPS = env.list('ALLOWED_ADMIN_IPS', default=['127.0.0.1'])  # pyright: ignore[reportArgumentType]
 
 # static
 STATIC_URL = 'static/'
