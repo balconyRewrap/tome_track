@@ -1,4 +1,5 @@
 """Serializers for Books application."""
+import bleach
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
@@ -199,3 +200,14 @@ class BookWriteSerializer(BookSerializer):
                 )
 
         return attrs
+
+    def validate_description(self, value: str) -> str:  # noqa: PLR6301
+        """Validate that the description does not contain control characters.
+
+        Args:
+            value (str): The description to validate.
+
+        Returns:
+            str: The validated description.
+        """
+        return bleach.clean(value, tags=['b', 'i', 'p'], strip=True)

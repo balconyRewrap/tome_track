@@ -84,3 +84,4 @@ pytest-xdist==3.8.0
     # testing
 celery[redis]==5.3.1
 django-celery-beat==2.9.0
+bleach==6.3.0
