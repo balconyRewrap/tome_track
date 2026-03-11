@@ -28,16 +28,15 @@ def get_token(api_client, user):
 
 def test_reset_password_success(api_client, user, get_token):
     cache.clear()
-    # token = get_token(user.email, "StrongPass123")
-    # api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
 
     url = reverse("password_reset")
     response = api_client.post(url, {"email": user.email}, format="json")
     assert response.status_code == status.HTTP_200_OK
-    assert "reset_token" in response.data
-    reset_token = response.data["reset_token"]
-    assert len(reset_token) > 0
-    assert isinstance(reset_token, str)
+    assert "detail" in response.data
+
+    # Token is no longer returned in the response; retrieve it from the DB
+    reset_token_obj = PasswordResetToken.objects.filter(user=user).latest('created_at')
+    reset_token = reset_token_obj.token
 
 
     url = reverse("password_reset_confirm")
@@ -74,7 +73,10 @@ def test_reset_password_expired_token(api_client, user, get_token):
     url = reverse("password_reset")
     response = api_client.post(url, {"email": user.email}, format="json")
     assert response.status_code == status.HTTP_200_OK
-    reset_token = response.data["reset_token"]
+
+    # Token is no longer returned in the response; retrieve it from the DB
+    reset_token_obj = PasswordResetToken.objects.filter(user=user).latest('created_at')
+    reset_token = reset_token_obj.token
 
     # Simulate token expiration by directly deleting the token from the database
     reset_token_model = PasswordResetToken.objects.filter(token=reset_token).first()

@@ -73,7 +73,7 @@ urlpatterns += [
     path('api/v1/admin/users/', AdminUserViewSet.as_view({'get': 'list'}), name='admin_users'),
     path(
         'api/v1/admin/users/<int:pk>/',
-        AdminUserViewSet.as_view({'get': 'retrieve', 'patch': 'update'}),
+        AdminUserViewSet.as_view({'get': 'retrieve', 'patch': 'partial_update'}),
         name='admin_user_detail',
     ),
 ]

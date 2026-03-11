@@ -19,6 +19,7 @@ from apps.users.serializers import (
     PasswordResetSerializer,
     UserProfileSerializer,
 )
+from apps.users.tasks import send_password_reset_email
 from apps.users.throttles import PasswordResetThrottle
 
 
@@ -185,16 +186,15 @@ class ChangeEmailView(GenericAPIView):
 
 
 @extend_schema(
-    summary="Reset Password Request. Not implemented fully yet.",
+    summary="Reset Password Request",
     description="Endpoint for requesting a password reset. "
     "The user provides their email, and if it exists, a password reset token is generated and emailed to them.",
     request=PasswordResetSerializer,
     responses={
         200: OpenApiResponse(
             response=PasswordResetSerializer,
+            description="Request accepted. If the email exists, a reset link has been sent.",
         ),
-        400: OpenApiResponse(description="Authentificated user email and reset email do not match."),
-        401: OpenApiResponse(description="Authentication credentials were not provided or Token is no longer valid."),
     },
     examples=[
         OpenApiExample(
@@ -207,7 +207,7 @@ class ChangeEmailView(GenericAPIView):
         OpenApiExample(
             "Response example",
             value={
-                "reset_token": "0d72a0f651bf48e2a80e37704223b702",
+                "detail": "If an account with that email exists, a password reset link has been sent.",
             },
             response_only=True,
         ),
@@ -222,14 +222,15 @@ class PasswordResetView(GenericAPIView):
 
     permission_classes = [AllowAny]
     serializer_class = PasswordResetSerializer
+    throttle_classes = [PasswordResetThrottle]
 
-    # TODO: change the post after implementing email sending to not return the token in response
     def post(self, request: Request) -> Response:
         """Post method for requesting a password reset.
 
         Returns:
             Response:
-                A response with status 200 OK if the request was successful, or 400 Bad Request if validation failed.
+                A response with status 200 OK. Always returns the same message to avoid
+                leaking whether an account with the given email exists.
         """
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -237,9 +238,8 @@ class PasswordResetView(GenericAPIView):
         user = User.objects.filter(email=email).first()
         if user:
             token = uuid.uuid4().hex
-            PasswordResetToken.objects.create(user=user, token=token, created_at=timezone.now(), used=False)
-            # TODO: return lower response always, send token by email
-            return Response({"reset_token": token}, status=status.HTTP_200_OK)
+            PasswordResetToken.objects.create(user=user, token=token)
+            send_password_reset_email.delay(user.email, token)
         return Response(
             {"detail": "If an account with that email exists, a password reset link has been sent."},
             status=status.HTTP_200_OK,

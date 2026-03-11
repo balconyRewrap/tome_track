@@ -74,3 +74,5 @@ typing-extensions==4.15.0
     #   referencing
 uritemplate==4.2.0
     # via drf-spectacular
+celery[redis]==5.3.1
+django-celery-beat==2.9.0
