@@ -1,6 +1,7 @@
 """Serializers for review book."""
 import re
 
+import bleach
 from rest_framework import serializers
 
 from apps.books.models import Book
@@ -102,4 +103,4 @@ class ReviewWriteSerializer(ReviewSerializer):
         # delete extra spaces
         value = re.sub(r'\s+', ' ', value).strip()
 
-        return value  # noqa: RET504
+        return bleach.clean(value, tags=['b', 'i', 'p'], strip=True)
