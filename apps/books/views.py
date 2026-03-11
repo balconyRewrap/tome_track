@@ -10,9 +10,11 @@ from django.db.models import Avg, Count, Q
 from django.db.models.functions import Greatest
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.filters import OrderingFilter
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -45,7 +47,21 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
 @extend_schema_view(
     list=extend_schema(
         summary='List books',
-        description='Returns a paginated list of all books. Public endpoint, cached.',
+        description=(
+            'Returns a paginated list of all books. Public endpoint, cached. '
+            'Supports ordering via ?ordering=average_rating, -average_rating, '
+            'ratings_count, -ratings_count, created_at, -created_at.'
+        ),
+        parameters=[
+            OpenApiParameter(
+                'ordering',
+                str,
+                description=(
+                    'Sort results. Allowed values: average_rating, -average_rating, '
+                    'ratings_count, -ratings_count, created_at, -created_at.'
+                ),
+            ),
+        ],
         responses={200: BookSerializer(many=True)},
         tags=['Books'],
     ),
@@ -139,6 +155,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     # MultiPartParser + FormParser are required for file (cover image) uploads.
     # JSONParser is kept so that requests without a file still work normally.
     parser_classes = [MultiPartParser, FormParser, JSONParser]
+    filter_backends = [DjangoFilterBackend, OrderingFilter]
+    filterset_class = BookFilter
+    ordering_fields = ['average_rating', 'ratings_count', 'created_at']
+    ordering = ['id']
     permission_classes_by_action = {
         'list': [AllowAny],
         'retrieve': [AllowAny],
@@ -195,6 +215,15 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
             OpenApiParameter('tag', int, many=True, description='Filter by tag ID (repeatable).'),
             OpenApiParameter('book_type', str, description='Filter by book type (book / comic).'),
             OpenApiParameter('country', str, description='Filter by country (case-insensitive contains).'),
+            OpenApiParameter(
+                'ordering',
+                str,
+                description=(
+                    'Sort results. Allowed values: average_rating, -average_rating, '
+                    'ratings_count, -ratings_count, created_at, -created_at. '
+                    'When q is set, defaults to trigram similarity.'
+                ),
+            ),
         ],
         responses={200: BookSerializer(many=True)},
         tags=['Books'],
@@ -234,6 +263,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if not book_filter.is_valid():
             return Response(book_filter.errors, status=400)
         qs = book_filter.qs
+        qs = OrderingFilter().filter_queryset(self.request, qs, self)
 
         page = self.paginate_queryset(qs)
         if page is not None:

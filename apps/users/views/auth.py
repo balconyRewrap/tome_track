@@ -2,19 +2,20 @@
 import logging
 from typing import Any
 
+from django.conf import settings
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import serializers, status
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
+from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from apps.users.serializers import (
     AuthCheckSerializer,
     CustomTokenObtainPairSerializer,
-    LogoutSerializer,
     RegisterSerializer,
 )
 from apps.users.throttles import LoginThrottle, RegisterThrottle
@@ -97,7 +98,6 @@ class RegisterView(GenericAPIView):
         OpenApiExample(
             "Response example",
             value={
-                "refresh": "token_refresh_string",
                 "access": "token_access_string",
                 "user_id": 1,
                 "email": "user@example.com",
@@ -109,93 +109,125 @@ class RegisterView(GenericAPIView):
     tags=['Authentication'],
 )
 class CustomTokenObtainPairView(TokenObtainPairView):
-    """Custom view for obtaining JWT tokens that uses a custom serializer to include user role in the token payload."""
+    """Custom view for obtaining JWT tokens. Returns access token in JSON, sets refresh token as httponly cookie."""
 
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [LoginThrottle]
 
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Returns access token in body and sets refresh token as httponly cookie.
+
+        Returns:
+            Response: response.
+        """
+        response = super().post(request, *args, **kwargs)
+        refresh_token = response.data.pop('refresh', None)  # pyright: ignore[reportOptionalMemberAccess]
+        if refresh_token:
+            response.set_cookie(
+                key='refresh_token',
+                value=refresh_token,
+                httponly=True,
+                secure=settings.SESSION_COOKIE_SECURE,
+                samesite='Lax',
+                max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+            )
+        return response
+
 
 @extend_schema(
     summary="User Logout",
-    description="Endpoint for logging out a user and blacklisting their refresh token.",
-    request=LogoutSerializer,
-    responses={205: OpenApiResponse(
-        response=LogoutSerializer,
-        ),
-        400: OpenApiResponse(description="Invalid token."),
+    description="Endpoint for logging out a user and blacklisting their refresh token. "
+    "Reads refresh token from httponly cookie.",
+    request=None,
+    responses={
+        205: OpenApiResponse(description="Successfully logged out."),
+        400: OpenApiResponse(description="Invalid or missing refresh token."),
         401: OpenApiResponse(description="Authentication credentials were not provided."),
     },
-    examples=[
-        OpenApiExample(
-            "Request example",
-            value={
-                "refresh": "token_refresh_string",
-            },
-            request_only=True,
-        ),
-        OpenApiExample(
-            "Response example",
-            response_only=True,
-        ),
-    ],
     tags=['Authentication'],
 )
 class LogoutView(GenericAPIView):
-    """User logout endpoint that blacklists the refresh token."""
+    """User logout endpoint that blacklists the refresh token stored in the httponly cookie."""
 
     permission_classes = [IsAuthenticated]
-    serializer_class = LogoutSerializer
 
-    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # noqa: ARG002
-        """Logs out the user by blacklisting the provided refresh token.
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # noqa: ARG002, PLR6301
+        """Logs out the user by blacklisting the refresh token from the cookie.
 
         Returns:
             Response: HTTP 205 if successful, HTTP 400 if token is invalid.
 
         Raises:
-            serializers.ValidationError: If the provided token is invalid.
+            serializers.ValidationError: If the token is missing or invalid.
         """
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        refresh_token = serializer.validated_data["refresh"]
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            raise serializers.ValidationError({'detail': 'Refresh token not found.'})
         try:
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response(status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
             logger = logging.getLogger(__name__)
             logger.exception("Error occurred while blacklisting refresh token")
-            raise serializers.ValidationError({"refresh": "Invalid token."}) from e
+            raise serializers.ValidationError({'detail': 'Invalid token.'}) from e
+        else:
+            response = Response(status=status.HTTP_205_RESET_CONTENT)
+            response.delete_cookie('refresh_token')
+            return response
 
 
-# Used only for tagging in API docs
 @extend_schema(
     summary="Token Refresh",
-    description="Endpoint for refreshing JWT tokens. Requires refresh token.",
-    responses={200: OpenApiResponse(),
-        401: OpenApiResponse(description="Token is blacklisted"),
+    description="Endpoint for refreshing JWT tokens. Reads refresh token "
+    "from httponly cookie, returns new access token in body and rotates refresh cookie.",
+    request=None,
+    responses={
+        200: OpenApiResponse(description="New access token."),
+        401: OpenApiResponse(description="Refresh token missing, invalid, or blacklisted."),
     },
     examples=[
         OpenApiExample(
-            "Request example",
-            value={
-                "refresh": "token_refresh_string",
-            },
-            request_only=True,
-        ),
-        OpenApiExample(
             "Response example",
-            value={
-                "refresh": "token_refresh_string",
-                "access": "token_access_string",
-            },
+            value={"access": "token_access_string"},
             response_only=True,
         ),
     ],
     tags=['Authentication'],
 )
-class CustomTokenRefreshView(TokenRefreshView):  # noqa: D101
-    pass
+class CustomTokenRefreshView(TokenRefreshView):
+    """Reads refresh token from httponly cookie and returns a new access token in JSON."""
+
+    def post(self, request: Request, *args: Any, **kwargs: Any) -> Response:  # noqa: ARG002
+        """Refreshes the access token using the refresh token stored in cookie.
+
+        Raises:
+            InvalidToken: If the refresh token is missing, invalid, or blacklisted.
+
+        Returns:
+            Response: HTTP 200 with new access token, or HTTP 401 if token is missing/invalid.
+        """
+        refresh_token = request.COOKIES.get('refresh_token')
+        if not refresh_token:
+            return Response({'detail': 'Refresh token not found.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        serializer = self.get_serializer(data={'refresh': refresh_token})
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as e:
+            raise InvalidToken(e.args[0]) from e
+
+        response = Response({'access': serializer.validated_data['access']}, status=status.HTTP_200_OK)
+        new_refresh = serializer.validated_data.get('refresh')
+        if new_refresh:
+            response.set_cookie(
+                key='refresh_token',
+                value=new_refresh,
+                httponly=True,
+                secure=settings.SESSION_COOKIE_SECURE,
+                samesite='Lax',
+                max_age=int(settings.SIMPLE_JWT['REFRESH_TOKEN_LIFETIME'].total_seconds()),
+            )
+        return response
 
 
 @extend_schema(tags=['Authentication', 'Testing'])

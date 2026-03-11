@@ -219,7 +219,6 @@ class ReviewViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         Returns:
             Response: A list of reviews matching the search query, ordered by relevance.
         """
-        book_id = self.kwargs.get('book_pk')
         query = request.query_params.get('query', '')
 
         if not query:
