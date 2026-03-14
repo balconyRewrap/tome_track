@@ -392,13 +392,47 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary='List tags',
-        description='Returns a paginated list of all tags. Public endpoint, cached.',
+        description=(
+            'Returns a paginated list of all tags. Public endpoint, cached. '
+            'Each tag includes translations for ru, en, and de plus a non-translated slug.'
+        ),
         responses={200: TagSerializer(many=True)},
+        examples=[
+            OpenApiExample(
+                'Tag list response',
+                value={
+                    'count': 2,
+                    'next': None,
+                    'previous': None,
+                    'results': [
+                        {
+                            'id': 1,
+                            'slug': 'science-fiction',
+                            'translations': {
+                                'ru': {'name': 'Nauchnaya fantastika'},
+                                'en': {'name': 'Science Fiction'},
+                                'de': {'name': 'Science-Fiction'},
+                            },
+                        },
+                        {
+                            'id': 2,
+                            'slug': 'fantasy',
+                            'translations': {
+                                'ru': {'name': 'Fantastika'},
+                                'en': {'name': 'Fantasy'},
+                                'de': {'name': 'Fantasie'},
+                            },
+                        },
+                    ],
+                },
+                response_only=True,
+            ),
+        ],
         tags=['Tags'],
     ),
     retrieve=extend_schema(
         summary='Retrieve a tag',
-        description='Returns details of a single tag by ID. Public endpoint, cached.',
+        description='Returns a single tag by ID with translations for ru, en, and de. Public endpoint, cached.',
         responses={
             200: TagSerializer,
             404: OpenApiResponse(description='Tag not found.'),
@@ -407,13 +441,43 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     create=extend_schema(
         summary='Create a tag',
-        description='Creates a new tag. Requires admin role.',
+        description=(
+            'Creates a new tag. Requires admin role. '
+            'Request must contain translations for all supported languages (ru, en, de). '
+            'Slug is language-independent and generated automatically if omitted.'
+        ),
         responses={
             201: TagSerializer,
             400: OpenApiResponse(description='Validation error.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
             403: OpenApiResponse(description='You do not have permission to perform this action.'),
         },
+        examples=[
+            OpenApiExample(
+                'Tag create payload',
+                value={
+                    'translations': {
+                        'ru': {'name': 'Nauchnaya fantastika'},
+                        'en': {'name': 'Science Fiction'},
+                        'de': {'name': 'Science-Fiction'},
+                    },
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Tag response',
+                value={
+                    'id': 1,
+                    'slug': 'science-fiction',
+                    'translations': {
+                        'ru': {'name': 'Nauchnaya fantastika'},
+                        'en': {'name': 'Science Fiction'},
+                        'de': {'name': 'Science-Fiction'},
+                    },
+                },
+                response_only=True,
+            ),
+        ],
         tags=['Tags'],
     ),
     destroy=extend_schema(
@@ -435,7 +499,7 @@ class TagViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     Cache is invalidated on create and destroy.
     """
 
-    queryset = Tag.objects.all().order_by('id')
+    queryset = Tag.objects.prefetch_related('translations').all().order_by('id')
     serializer_class = TagSerializer
     permission_classes_by_action = {
         'list': [AllowAny],

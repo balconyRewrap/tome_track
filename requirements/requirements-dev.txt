@@ -23,6 +23,10 @@ django-environ==0.13.0
     # via tome-track (pyproject.toml)
 django-filter==25.2
     # via tome-track (pyproject.toml)
+django-parler>=2.3
+    # via tome-track (pyproject.toml)
+django-parler-rest>=2.2
+    # via tome-track (pyproject.toml)
 django-redis==6.0.0
     # via tome-track (pyproject.toml)
 djangorestframework==3.16.1

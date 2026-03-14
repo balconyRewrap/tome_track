@@ -25,6 +25,7 @@ from apps.books.views import (
     BookViewSet,
     TagViewSet,
 )
+from apps.common.admin import clear_all_cache
 from apps.reviews.views import ReviewViewSet, UserMeReviewsView
 from apps.userbooks.views import UserBookViewSet
 from apps.users.views.admin import (
@@ -47,6 +48,7 @@ from apps.users.views.user import (
 
 # admin
 urlpatterns = [
+    path('admin/clear-cache/', clear_all_cache, name='admin-clear-cache'),
     path('admin/', admin.site.urls),
 ]
 
@@ -99,7 +101,7 @@ urlpatterns += [
     path('api/v1/books/<int:pk>/', books_detail, name='book_detail'),
 ]
 
-authors = AuthorViewSet.as_view({'get': 'list', 'post': 'create'})
+authors = AuthorViewSet.as_view({'get': 'list', 'post': 'create', 'delete': 'destroy'})
 authors_detail = AuthorViewSet.as_view({'get': 'retrieve'})
 
 urlpatterns += [
@@ -107,7 +109,7 @@ urlpatterns += [
     path('api/v1/authors/<int:pk>/', authors_detail, name='author-detail'),
 ]
 
-tags = TagViewSet.as_view({'get': 'list', 'post': 'create'})
+tags = TagViewSet.as_view({'get': 'list', 'post': 'create', 'delete': 'destroy'})
 tags_detail = TagViewSet.as_view({'get': 'retrieve'})
 
 urlpatterns += [

@@ -46,7 +46,21 @@ def admin_user(db) -> User:
 
 @pytest.fixture
 def tag(db) -> Tag:
-    return Tag.objects.create(name='Existing Tag', slug='existing-tag')
+    tag = Tag.objects.create(slug='existing-tag')
+    tag.create_translation('ru', name='Sushchestvuyushchii teg')
+    tag.create_translation('en', name='Existing Tag')
+    tag.create_translation('de', name='Vorhandenes Tag')
+    return tag
+
+
+def _translations_payload(ru: str, en: str, de: str) -> dict:
+    return {
+        'translations': {
+            'ru': {'name': ru},
+            'en': {'name': en},
+            'de': {'name': de},
+        },
+    }
 
 
 @pytest.fixture(autouse=True)
@@ -80,13 +94,14 @@ def test_list_tags_contains_existing_tag(api_client, tag):
 
 
 def test_list_tags_response_fields(api_client, tag):
-    """Each item in the list has 'id', 'name', and 'slug' fields."""
+    """Each item in the list has 'id', 'slug', and full 'translations' fields."""
     response = api_client.get(TAGS_URL)
     results = response.data.get('results', response.data)
     assert len(results) > 0
     first = results[0]
-    for field in ('id', 'name', 'slug'):
+    for field in ('id', 'slug', 'translations'):
         assert field in first, f"Field '{field}' missing from list response"
+    assert set(first['translations']) == {'ru', 'en', 'de'}
 
 
 # RETRIEVE  GET /api/v1/tags/<pk>/
@@ -96,8 +111,10 @@ def test_retrieve_tag_anonymous_returns_200(api_client, tag):
     response = api_client.get(tag_detail_url(tag.pk))
     assert response.status_code == status.HTTP_200_OK
     assert response.data['id'] == tag.pk
-    assert response.data['name'] == tag.name
     assert response.data['slug'] == tag.slug
+    assert response.data['translations']['ru']['name'] == 'Sushchestvuyushchii teg'
+    assert response.data['translations']['en']['name'] == 'Existing Tag'
+    assert response.data['translations']['de']['name'] == 'Vorhandenes Tag'
 
 
 def test_retrieve_tag_not_found_returns_404(api_client):
@@ -107,10 +124,11 @@ def test_retrieve_tag_not_found_returns_404(api_client):
 
 
 def test_retrieve_tag_response_fields(api_client, tag):
-    """Retrieve response contains 'id', 'name', and 'slug'."""
+    """Retrieve response contains 'id', 'slug', and 'translations'."""
     response = api_client.get(tag_detail_url(tag.pk))
-    for field in ('id', 'name', 'slug'):
+    for field in ('id', 'slug', 'translations'):
         assert field in response.data, f"Field '{field}' missing from retrieve response"
+    assert set(response.data['translations']) == {'ru', 'en', 'de'}
 
 
 # CREATE  POST /api/v1/tags/
@@ -118,9 +136,10 @@ def test_retrieve_tag_response_fields(api_client, tag):
 def test_create_tag_by_admin_returns_201(api_client, admin_user):
     """Admin can create a tag."""
     api_client.force_authenticate(user=admin_user)
-    response = api_client.post(TAGS_URL, {'name': 'New Tag', 'slug': 'new-tag'}, format='json')
+    payload = _translations_payload('Novyi teg', 'New Tag', 'Neues Tag')
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_201_CREATED
-    assert response.data['name'] == 'New Tag'
+    assert response.data['translations']['en']['name'] == 'New Tag'
     assert response.data['slug'] == 'new-tag'
     assert Tag.objects.filter(slug='new-tag').exists()
 
@@ -128,29 +147,39 @@ def test_create_tag_by_admin_returns_201(api_client, admin_user):
 def test_create_tag_by_non_admin_returns_403(api_client, user):
     """Regular authenticated user cannot create a tag (admin-only)."""
     api_client.force_authenticate(user=user)
-    response = api_client.post(TAGS_URL, {'name': 'Forbidden Tag', 'slug': 'forbidden-tag'}, format='json')
+    payload = _translations_payload('Zapreshchennyi teg', 'Forbidden Tag', 'Verbotenes Tag')
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_403_FORBIDDEN
     assert not Tag.objects.filter(slug='forbidden-tag').exists()
 
 
 def test_create_tag_unauthenticated_returns_401(api_client):
     """Unauthenticated request to create a tag returns 401."""
-    response = api_client.post(TAGS_URL, {'name': 'Ghost Tag', 'slug': 'ghost-tag'}, format='json')
+    payload = _translations_payload('Prizrachnyi teg', 'Ghost Tag', 'Geistertag')
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
     assert not Tag.objects.filter(slug='ghost-tag').exists()
 
 
 def test_create_tag_missing_name_returns_400(api_client, admin_user):
-    """Create tag without 'name' returns 400."""
+    """Create tag without one translated name returns 400."""
     api_client.force_authenticate(user=admin_user)
-    response = api_client.post(TAGS_URL, {'slug': 'no-name'}, format='json')
+    payload = {
+        'translations': {
+            'ru': {'name': 'Bez angliiskogo'},
+            'en': {},
+            'de': {'name': 'Ohne Englisch'},
+        },
+    }
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_create_tag_duplicate_name_returns_400(api_client, admin_user, tag):
-    """Create tag with an existing name returns 400 (unique constraint)."""
+    """Create tag with an existing translated name returns 400."""
     api_client.force_authenticate(user=admin_user)
-    response = api_client.post(TAGS_URL, {'name': tag.name, 'slug': 'different-slug'}, format='json')
+    payload = _translations_payload('Novyi unikalnyi', 'Existing Tag', 'Neues Einzigartiges')
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
@@ -158,17 +187,20 @@ def test_create_tag_name_too_long_returns_400(api_client, admin_user):
     """Create tag with name exceeding max_length returns 400."""
     api_client.force_authenticate(user=admin_user)
     long_name = 'T' * 101  # max_length=100
-    response = api_client.post(TAGS_URL, {'name': long_name, 'slug': 'long-name'}, format='json')
+    payload = _translations_payload('Obychnoe imya', long_name, 'Normales Name')
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 def test_create_tag_response_fields(api_client, admin_user):
-    """Created tag response contains 'id', 'name', and 'slug'."""
+    """Created tag response contains 'id', 'slug', and 'translations'."""
     api_client.force_authenticate(user=admin_user)
-    response = api_client.post(TAGS_URL, {'name': 'Field Tag', 'slug': 'field-tag'}, format='json')
+    payload = _translations_payload('Teg polei', 'Field Tag', 'Feldtag')
+    response = api_client.post(TAGS_URL, payload, format='json')
     assert response.status_code == status.HTTP_201_CREATED
-    for field in ('id', 'name', 'slug'):
+    for field in ('id', 'slug', 'translations'):
         assert field in response.data, f"Field '{field}' missing from create response"
+    assert set(response.data['translations']) == {'ru', 'en', 'de'}
 
 
 # Cache invalidation
@@ -179,7 +211,8 @@ def test_create_tag_invalidates_cache(api_client, admin_user, tag):
     count_before = len(first.data.get('results', first.data))
 
     api_client.force_authenticate(user=admin_user)
-    api_client.post(TAGS_URL, {'name': 'Cache Bust Tag', 'slug': 'cache-bust-tag'}, format='json')
+    payload = _translations_payload('Kesh-invalidator', 'Cache Bust Tag', 'Cache-Bust-Tag')
+    api_client.post(TAGS_URL, payload, format='json')
     api_client.force_authenticate(user=None)
 
     second = api_client.get(TAGS_URL)

@@ -5,12 +5,14 @@ from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.utils.text import slugify
+from parler.models import TranslatableModel, TranslatedFields
 
 from apps.common.models import TimestampedModel
 from apps.common.validators import validate_model_cover_image
 
 AUTHOR_MAX_COUNT: Final[int] = 10
 TAG_MAX_COUNT: Final[int] = 20
+TAG_TRANSLATION_LANGUAGES: Final[tuple[str, str, str]] = ('ru', 'en', 'de')
 
 
 # now nothing more than name and timestamp fields is usable now, but we can easily add more fields later if needed
@@ -34,17 +36,19 @@ class Author(TimestampedModel):
         return self.name
 
 
-class Tag(TimestampedModel):
+class Tag(TranslatableModel, TimestampedModel):  # pyright: ignore[reportIncompatibleMethodOverride,reportIncompatibleVariableOverride]
     """Model representing a tag for books.
 
     Attributes:
-        name (str): unique name of the tag, with a maximum length of 100 characters.
-        slug (str): unique slug for the tag, generated automatically.
+        name (str): translated tag name, with a maximum length of 100 characters.
+        slug (str): unique non-translated slug, generated automatically.
         created_at (DateTimeField): Timestamp when the tag was created (inherited from TimestampedModel).
         updated_at (DateTimeField): Timestamp when the tag was last updated (inherited from TimestampedModel).
     """
 
-    name = models.CharField(max_length=100, unique=True)
+    translations = TranslatedFields(
+        name=models.CharField(max_length=100),
+    )
     slug = models.SlugField(unique=True, blank=True)
 
     def __str__(self) -> str:
@@ -53,11 +57,15 @@ class Tag(TimestampedModel):
         Returns:
             str: The name of the tag.
         """
-        return self.name
+        translated_name = self.safe_translation_getter('name', language_code='en', any_language=True)
+        return str(translated_name) if translated_name else self.slug
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        """Create slug before saving."""
-        self.slug = slugify(self.name)
+        """Create slug on first save from the translated name."""
+        if not self.slug:
+            source_name = getattr(self, 'name', '')
+            if source_name:
+                self.slug = slugify(str(source_name))
         super().save(*args, **kwargs)
 
 

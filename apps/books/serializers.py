@@ -1,9 +1,13 @@
 """Serializers for Books application."""
+from typing import Any, cast
+
 import bleach
+from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema_field
+from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
 from rest_framework import serializers
 
-from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, Author, Book, BookType, Tag
+from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, TAG_TRANSLATION_LANGUAGES, Author, Book, BookType, Tag
 from apps.common.validators import validate_serializer_name
 
 
@@ -42,33 +46,99 @@ class AuthorSerializer(serializers.ModelSerializer):
         return value
 
 
-class TagSerializer(serializers.ModelSerializer):
-    """Serializer for Tag model."""
+class TagSerializer(TranslatableModelSerializer):
+    """Serializer for Tag model with explicit translations payload."""
 
-    name = serializers.CharField(min_length=2, max_length=100, validators=[validate_serializer_name])
     slug = serializers.SlugField(read_only=True)
+    translations = TranslatedFieldsField(shared_model=Tag)
+
     class Meta:  # noqa: D106
         model = Tag
-        fields = ['id', 'name', 'slug']
+        fields = ['id', 'slug', 'translations']
 
-    def validate_name(self, value: str) -> str:
-        """Validate that the name does not contain control characters.
+    def validate_translations(self, value: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+        """Validate translated names for required languages.
 
         Args:
-            value (str): The name to validate.
+            value (dict[str, dict[str, str]]): Translation payload by language code.
 
         Raises:
-            serializers.ValidationError: If the name contains control characters.
+            serializers.ValidationError: If payload is malformed or missing required languages.
 
         Returns:
-            str: The validated name.
+            dict[str, dict[str, str]]: Normalized and validated translations.
         """
-        qs = Tag.objects.filter(name=value)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError('A tag with this name already exists.')
+        if not isinstance(value, dict) or not value:
+            raise serializers.ValidationError('translations must be a non-empty object.')
+
+        allowed_languages = set(TAG_TRANSLATION_LANGUAGES)
+        provided_languages = set(value)
+        unknown_languages = provided_languages - allowed_languages
+        if unknown_languages:
+            raise serializers.ValidationError(
+                f'Unsupported languages: {", ".join(sorted(unknown_languages))}. '
+                f'Allowed languages: {", ".join(TAG_TRANSLATION_LANGUAGES)}.',
+            )
+
+        if not self.partial:
+            missing_languages = allowed_languages - provided_languages
+            if missing_languages:
+                raise serializers.ValidationError(
+                    f'Missing required languages: {", ".join(sorted(missing_languages))}.',
+                )
+
+        for language_code, payload in value.items():
+            if not isinstance(payload, dict):
+                raise serializers.ValidationError({language_code: 'Translation value must be an object.'})
+
+            raw_name = payload.get('name')
+            if raw_name is None:
+                raise serializers.ValidationError({language_code: {'name': 'This field is required.'}})
+
+            payload['name'] = validate_serializer_name(str(raw_name))
+            duplicated = Tag.objects.filter(
+                translations__language_code=language_code,
+                translations__name=payload['name'],
+            )
+            if self.instance:
+                duplicated = duplicated.exclude(pk=self.instance.pk)
+            if duplicated.exists():
+                raise serializers.ValidationError(
+                    {language_code: {'name': 'A tag with this name already exists for this language.'}},
+                )
+
         return value
+
+    def to_representation(self, instance: Tag) -> dict:
+        """Return all supported languages even if a translation is missing.
+
+        Returns:
+            dict: Serialized tag payload with ru, en and de language keys.
+        """
+        data = super().to_representation(instance)
+        existing_translations = data.get('translations', {})
+        data['translations'] = {
+            language_code: {'name': existing_translations.get(language_code, {}).get('name')}
+            for language_code in TAG_TRANSLATION_LANGUAGES
+        }
+        return data
+
+    def save(self, **kwargs: Any) -> Tag:
+        """Save tag and derive slug from preferred translation when needed.
+
+        Returns:
+            Tag: Saved tag instance.
+        """
+        validated_data = cast('dict[str, dict[str, dict[str, str]]]', self.validated_data)
+        translations = validated_data.get('translations', {})
+        slug_source = (
+            translations.get('en', {}).get('name')
+            or translations.get('ru', {}).get('name')
+            or translations.get('de', {}).get('name')
+        )
+        if slug_source and not self.instance and not kwargs.get('slug'):
+            kwargs['slug'] = slugify(slug_source)
+        return cast('Tag', super().save(**kwargs))
 
 
 class BookSerializer(serializers.ModelSerializer):
