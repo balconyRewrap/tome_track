@@ -159,6 +159,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # CORS
 CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])  # pyright: ignore[reportArgumentType]
+CORS_ALLOW_CREDENTIALS = True
 
 # Frontend
 FRONTEND_URL = env('FRONTEND_URL', default='http://localhost:3000')  # pyright: ignore[reportArgumentType]
@@ -183,17 +184,15 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': timedelta(hours=6),
     },
 }
-CORS_ALLOWED_CREDENTIALS = True
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # Throttle rates
-ANON_THROTTLE_RATE = '60/min'
-USER_THROTTLE_RATE = '300/min'
-REGISTER_THROTTLE_RATE = '10/hour'
-LOGIN_THROTTLE_RATE = '5/min'
-# its not password
-PASSWORD_RESET_THROTTLE_RATE = '5/hour'  # noqa: S105
+ANON_THROTTLE_RATE = env('ANON_THROTTLE_RATE', default='60/min')  # pyright: ignore[reportArgumentType]
+USER_THROTTLE_RATE = env('USER_THROTTLE_RATE', default='300/min')  # pyright: ignore[reportArgumentType]
+REGISTER_THROTTLE_RATE = env('REGISTER_THROTTLE_RATE', default='10/hour')  # pyright: ignore[reportArgumentType]
+LOGIN_THROTTLE_RATE = env('LOGIN_THROTTLE_RATE', default='5/min')  # pyright: ignore[reportArgumentType]
+PASSWORD_RESET_THROTTLE_RATE = env('PASSWORD_RESET_THROTTLE_RATE', default='5/hour')  # pyright: ignore[reportArgumentType]
 
 # DRF
 REST_FRAMEWORK = {
@@ -265,12 +264,12 @@ LOGGING = {
     'loggers': {
         'django': {
             'handlers': ['file', 'console'],
-            'level': 'WARNING',
+            'level': 'INFO',
             'propagate': False,
         },
         'django.request': {
             'handlers': ['file', 'console'],
-            'level': 'ERROR',
+            'level': 'INFO',
             'propagate': False,
         },
         'apps': {

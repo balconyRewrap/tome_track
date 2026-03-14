@@ -1,13 +1,14 @@
 """Views for the books app."""
 import hashlib
 import json
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
-from django.db.models import Avg, Count, Q
-from django.db.models.functions import Greatest
+from django.db.models import Avg, Count, Q, Value
+from django.db.models.functions import Coalesce, Greatest
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
@@ -148,7 +149,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """
 
     queryset = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
-        average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+        average_rating=Coalesce(
+            Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+            Value(Decimal(0)),
+        ),
         ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
     ).order_by('id')
     serializer_class = BookSerializer
@@ -245,7 +249,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
             return Response(cached)
 
         qs = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
-            average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+            average_rating=Coalesce(
+                Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+                Value(Decimal(0)),
+            ),
             ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
         )
 
@@ -263,7 +270,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if not book_filter.is_valid():
             return Response(book_filter.errors, status=400)
         qs = book_filter.qs
-        qs = OrderingFilter().filter_queryset(self.request, qs, self)
+        if 'ordering' in request.query_params:
+            qs = OrderingFilter().filter_queryset(self.request, qs, self)
 
         page = self.paginate_queryset(qs)
         if page is not None:

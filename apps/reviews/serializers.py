@@ -14,11 +14,14 @@ MAX_WORD_LENGTH = 200
 class ReviewSerializer(serializers.ModelSerializer):
     """Serializer for Review model."""
 
+    username = serializers.CharField(source='user.username', read_only=True)
+
     class Meta:  # noqa: D106
         model = Review
         fields = [
             'id',
             'user',
+            'username',
             'book',
             'name',
             'body',

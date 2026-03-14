@@ -25,7 +25,7 @@ def send_password_reset_email(self, user_email: str, reset_token: str) -> None: 
         reset_token: The plaintext password reset token.
     """
     try:
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        reset_url = f"{settings.FRONTEND_URL}/password-reset/confirm?token={reset_token}"
         context = {'reset_url': reset_url, 'user_email': user_email}
         text_body = render_to_string('emails/password_reset.txt', context)
         html_body = render_to_string('emails/password_reset.html', context)
