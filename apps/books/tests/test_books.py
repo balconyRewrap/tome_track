@@ -351,7 +351,7 @@ def test_create_book_response_has_zero_ratings(api_client, user, author, tag):
     retrieve_resp = api_client.get(books_detail_url(book_id))
     assert retrieve_resp.status_code == status.HTTP_200_OK
     assert retrieve_resp.data['ratings_count'] == 0
-    assert retrieve_resp.data['average_rating'] is None
+    assert retrieve_resp.data['average_rating'] == 0.0
 
 
 

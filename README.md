@@ -243,6 +243,8 @@ Copy `.env.example` and fill in the values.
 | `EMAIL_HOST_USER` | SMTP username |
 | `EMAIL_HOST_PASSWORD` | SMTP password / app password |
 | `DEFAULT_FROM_EMAIL` | Sender address for outgoing emails |
+| `SERVER_EMAIL` | Sender used for Django error emails (defaults to `DEFAULT_FROM_EMAIL`) |
+| `ADMIN_ERROR_EMAILS` | Comma-separated recipients for unhandled exception reports |
 
 ## API Overview
 

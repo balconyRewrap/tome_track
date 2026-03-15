@@ -22,8 +22,13 @@ services:
     image: nginx:1.27-alpine
     ports:
       - "80:80"
+    env_file:
+      - .env.production
+    environment:
+      DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH}
     volumes:
-      - ./nginx:/etc/nginx/conf.d:ro
+      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./dist:/usr/share/nginx/html:ro
       - static_volume:/app/staticfiles:ro
       - ./media:/app/media:ro
     depends_on:

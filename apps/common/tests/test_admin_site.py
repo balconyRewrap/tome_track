@@ -55,3 +55,66 @@ def test_admin_access_blocked_ip(settings):
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN  # pyright: ignore[reportAttributeAccessIssue]
 
+
+def test_admin_index_contains_clear_cache_button(settings):
+    """Admin index includes a clear-cache button for staff users."""
+    settings.ALLOWED_ADMIN_IPS = ['123.123.123.123']
+    from apps.common import middleware
+    middleware.ALLOWED_ADMIN_IPS = settings.ALLOWED_ADMIN_IPS
+
+    admin_user = User.objects.create_superuser(  # pyright: ignore[reportAttributeAccessIssue]
+        email='root@example.com',
+        username='root',
+        password='StrongPass123',
+    )
+    client = APIClient()
+    client.force_login(admin_user)
+
+    response = client.get(admin_panel, REMOTE_ADDR='123.123.123.123')
+    assert response.status_code == status.HTTP_200_OK  # pyright: ignore[reportAttributeAccessIssue]
+    assert '/admin/clear-cache/' in response.content.decode()  # pyright: ignore[reportAttributeAccessIssue]
+
+
+def test_admin_clear_cache_endpoint_clears_cache(settings):
+    """Posting to admin clear-cache endpoint purges cached values."""
+    settings.ALLOWED_ADMIN_IPS = ['123.123.123.123']
+    from apps.common import middleware
+    middleware.ALLOWED_ADMIN_IPS = settings.ALLOWED_ADMIN_IPS
+
+    admin_user = User.objects.create_superuser(  # pyright: ignore[reportAttributeAccessIssue]
+        email='cacheadmin@example.com',
+        username='cacheadmin',
+        password='StrongPass123',
+    )
+    client = APIClient()
+    client.force_login(admin_user)
+
+    cache.set('admin-clear-cache-test', 'value', timeout=120)
+    assert cache.get('admin-clear-cache-test') == 'value'
+
+    response = client.post(reverse('admin-clear-cache'), REMOTE_ADDR='123.123.123.123')
+    assert response.status_code == status.HTTP_302_FOUND  # pyright: ignore[reportAttributeAccessIssue]
+    assert cache.get('admin-clear-cache-test') is None
+
+
+def test_admin_clear_cache_endpoint_denies_non_staff(settings):
+    """Non-staff users cannot trigger global cache clear."""
+    settings.ALLOWED_ADMIN_IPS = ['123.123.123.123']
+    from apps.common import middleware
+    middleware.ALLOWED_ADMIN_IPS = settings.ALLOWED_ADMIN_IPS
+
+    regular_user = User.objects.create_user(  # pyright: ignore[reportAttributeAccessIssue]
+        email='plain@example.com',
+        username='plain',
+        password='StrongPass123',
+        role='user',
+    )
+    client = APIClient()
+    client.force_login(regular_user)
+
+    cache.set('admin-clear-cache-denied', 'value', timeout=120)
+    response = client.post(reverse('admin-clear-cache'), REMOTE_ADDR='123.123.123.123')
+
+    assert response.status_code == status.HTTP_302_FOUND  # pyright: ignore[reportAttributeAccessIssue]
+    assert cache.get('admin-clear-cache-denied') == 'value'
+

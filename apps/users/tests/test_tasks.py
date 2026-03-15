@@ -79,7 +79,7 @@ def test_send_password_reset_email_url_in_body():
     """Both the plain-text and HTML bodies contain the correct reset URL."""
     send_password_reset_email.apply(args=[EMAIL, TOKEN])  # pyright: ignore[reportCallIssue]
 
-    expected_url = f"http://localhost:3000/reset-password?token={TOKEN}"
+    expected_url = f"http://localhost:3000/password-reset/confirm?token={TOKEN}"
     sent = mail.outbox[0]
     assert expected_url in sent.body
     # html_message is stored in alternatives as (content, mime_type)

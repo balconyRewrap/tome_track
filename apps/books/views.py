@@ -1,13 +1,14 @@
 """Views for the books app."""
 import hashlib
 import json
+from decimal import Decimal
 from typing import Any
 
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
-from django.db.models import Avg, Count, Q
-from django.db.models.functions import Greatest
+from django.db.models import Avg, Count, Q, Value
+from django.db.models.functions import Coalesce, Greatest
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from django_filters.rest_framework import DjangoFilterBackend
@@ -49,6 +50,7 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
         summary='List books',
         description=(
             'Returns a paginated list of all books. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required). '
             'Supports ordering via ?ordering=average_rating, -average_rating, '
             'ratings_count, -ratings_count, created_at, -created_at.'
         ),
@@ -67,7 +69,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     retrieve=extend_schema(
         summary='Retrieve a book',
-        description='Returns details of a single book by ID. Public endpoint, cached.',
+        description=(
+            'Returns details of a single book by ID. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={
             200: BookSerializer,
             404: OpenApiResponse(description='Book not found.'),
@@ -76,7 +81,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     create=extend_schema(
         summary='Create a book',
-        description='Creates a new book. Requires authentication.',
+        description=(
+            'Creates a new book. Requires authentication. '
+            'Permissions: authenticated users.'
+        ),
         request=BookWriteSerializer,
         responses={
             201: BookWriteSerializer,
@@ -103,7 +111,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     update=extend_schema(
         summary='Update a book',
-        description='Fully replaces a book. Requires ownership or admin role.',
+        description=(
+            'Fully replaces a book. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         request=BookWriteSerializer,
         responses={
             200: BookWriteSerializer,
@@ -116,7 +127,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     partial_update=extend_schema(
         summary='Partially update a book',
-        description='Updates one or more fields of a book. Requires ownership or admin role.',
+        description=(
+            'Updates one or more fields of a book. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         request=BookWriteSerializer,
         responses={
             200: BookWriteSerializer,
@@ -129,7 +143,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     destroy=extend_schema(
         summary='Delete a book',
-        description='Permanently deletes a book. Requires ownership or admin role.',
+        description=(
+            'Permanently deletes a book. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         responses={
             204: OpenApiResponse(description='Book deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
@@ -148,7 +165,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     """
 
     queryset = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
-        average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+        average_rating=Coalesce(
+            Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+            Value(Decimal(0)),
+        ),
         ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
     ).order_by('id')
     serializer_class = BookSerializer
@@ -207,7 +227,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         description=(
             'Search books by title with trigram similarity (supports typos). '
             'Combine with author, tag, book_type, and country filters. '
-            'Omitting q returns all books. Results are cached for 3 minutes.'
+            'Omitting q returns all books. Results are cached for 3 minutes. '
+            'Permissions: anyone (no authentication required).'
         ),
         parameters=[
             OpenApiParameter('q', str, description='Search query — supports typos via trigram similarity.'),
@@ -245,7 +266,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
             return Response(cached)
 
         qs = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
-            average_rating=Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+            average_rating=Coalesce(
+                Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+                Value(Decimal(0)),
+            ),
             ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
         )
 
@@ -263,7 +287,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if not book_filter.is_valid():
             return Response(book_filter.errors, status=400)
         qs = book_filter.qs
-        qs = OrderingFilter().filter_queryset(self.request, qs, self)
+        if 'ordering' in request.query_params:
+            qs = OrderingFilter().filter_queryset(self.request, qs, self)
 
         page = self.paginate_queryset(qs)
         if page is not None:
@@ -301,13 +326,19 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary='List authors',
-        description='Returns a paginated list of all authors. Public endpoint, cached.',
+        description=(
+            'Returns a paginated list of all authors. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={200: AuthorSerializer(many=True)},
         tags=['Authors'],
     ),
     retrieve=extend_schema(
         summary='Retrieve an author',
-        description='Returns details of a single author by ID. Public endpoint, cached.',
+        description=(
+            'Returns details of a single author by ID. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={
             200: AuthorSerializer,
             404: OpenApiResponse(description='Author not found.'),
@@ -316,7 +347,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     create=extend_schema(
         summary='Create an author',
-        description='Creates a new author. Requires authentication.',
+        description=(
+            'Creates a new author. Requires authentication. '
+            'Permissions: authenticated users.'
+        ),
         responses={
             201: AuthorSerializer,
             400: OpenApiResponse(description='Validation error.'),
@@ -326,7 +360,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     destroy=extend_schema(
         summary='Delete an author',
-        description='Permanently deletes an author. Requires admin role.',
+        description=(
+            'Permanently deletes an author. Requires admin role. '
+            'Permissions: admin users.'
+        ),
         responses={
             204: OpenApiResponse(description='Author deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
@@ -384,13 +421,51 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary='List tags',
-        description='Returns a paginated list of all tags. Public endpoint, cached.',
+        description=(
+            'Returns a paginated list of all tags. Public endpoint, cached. '
+            'Each tag includes translations for ru, en, and de plus a non-translated slug. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={200: TagSerializer(many=True)},
+        examples=[
+            OpenApiExample(
+                'Tag list response',
+                value={
+                    'count': 2,
+                    'next': None,
+                    'previous': None,
+                    'results': [
+                        {
+                            'id': 1,
+                            'slug': 'science-fiction',
+                            'translations': {
+                                'ru': {'name': 'Nauchnaya fantastika'},
+                                'en': {'name': 'Science Fiction'},
+                                'de': {'name': 'Science-Fiction'},
+                            },
+                        },
+                        {
+                            'id': 2,
+                            'slug': 'fantasy',
+                            'translations': {
+                                'ru': {'name': 'Fantastika'},
+                                'en': {'name': 'Fantasy'},
+                                'de': {'name': 'Fantasie'},
+                            },
+                        },
+                    ],
+                },
+                response_only=True,
+            ),
+        ],
         tags=['Tags'],
     ),
     retrieve=extend_schema(
         summary='Retrieve a tag',
-        description='Returns details of a single tag by ID. Public endpoint, cached.',
+        description=(
+            'Returns a single tag by ID with translations for ru, en, and de. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={
             200: TagSerializer,
             404: OpenApiResponse(description='Tag not found.'),
@@ -399,18 +474,52 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     create=extend_schema(
         summary='Create a tag',
-        description='Creates a new tag. Requires admin role.',
+        description=(
+            'Creates a new tag. Requires admin role. '
+            'Permissions: admin users. '
+            'Request must contain translations for all supported languages (ru, en, de). '
+            'Slug is language-independent and generated automatically if omitted.'
+        ),
         responses={
             201: TagSerializer,
             400: OpenApiResponse(description='Validation error.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
             403: OpenApiResponse(description='You do not have permission to perform this action.'),
         },
+        examples=[
+            OpenApiExample(
+                'Tag create payload',
+                value={
+                    'translations': {
+                        'ru': {'name': 'Nauchnaya fantastika'},
+                        'en': {'name': 'Science Fiction'},
+                        'de': {'name': 'Science-Fiction'},
+                    },
+                },
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Tag response',
+                value={
+                    'id': 1,
+                    'slug': 'science-fiction',
+                    'translations': {
+                        'ru': {'name': 'Nauchnaya fantastika'},
+                        'en': {'name': 'Science Fiction'},
+                        'de': {'name': 'Science-Fiction'},
+                    },
+                },
+                response_only=True,
+            ),
+        ],
         tags=['Tags'],
     ),
     destroy=extend_schema(
         summary='Delete a tag',
-        description='Permanently deletes a tag. Requires admin role.',
+        description=(
+            'Permanently deletes a tag. Requires admin role. '
+            'Permissions: admin users.'
+        ),
         responses={
             204: OpenApiResponse(description='Tag deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
@@ -427,7 +536,7 @@ class TagViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     Cache is invalidated on create and destroy.
     """
 
-    queryset = Tag.objects.all().order_by('id')
+    queryset = Tag.objects.prefetch_related('translations').all().order_by('id')
     serializer_class = TagSerializer
     permission_classes_by_action = {
         'list': [AllowAny],

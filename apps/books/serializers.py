@@ -1,10 +1,17 @@
 """Serializers for Books application."""
+import logging
+from typing import Any, cast
+
 import bleach
+from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema_field
+from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
 from rest_framework import serializers
 
-from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, Author, Book, BookType, Tag
+from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, TAG_TRANSLATION_LANGUAGES, Author, Book, BookType, Tag
 from apps.common.validators import validate_serializer_name
+
+logger = logging.getLogger(__name__)
 
 
 # Annotating the *class* (not the instance) is the only reliable way to override
@@ -42,33 +49,99 @@ class AuthorSerializer(serializers.ModelSerializer):
         return value
 
 
-class TagSerializer(serializers.ModelSerializer):
-    """Serializer for Tag model."""
+class TagSerializer(TranslatableModelSerializer):
+    """Serializer for Tag model with explicit translations payload."""
 
-    name = serializers.CharField(min_length=2, max_length=100, validators=[validate_serializer_name])
     slug = serializers.SlugField(read_only=True)
+    translations = TranslatedFieldsField(shared_model=Tag)
+
     class Meta:  # noqa: D106
         model = Tag
-        fields = ['id', 'name', 'slug']
+        fields = ['id', 'slug', 'translations']
 
-    def validate_name(self, value: str) -> str:
-        """Validate that the name does not contain control characters.
+    def validate_translations(self, value: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+        """Validate translated names for required languages.
 
         Args:
-            value (str): The name to validate.
+            value (dict[str, dict[str, str]]): Translation payload by language code.
 
         Raises:
-            serializers.ValidationError: If the name contains control characters.
+            serializers.ValidationError: If payload is malformed or missing required languages.
 
         Returns:
-            str: The validated name.
+            dict[str, dict[str, str]]: Normalized and validated translations.
         """
-        qs = Tag.objects.filter(name=value)
-        if self.instance:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError('A tag with this name already exists.')
+        if not isinstance(value, dict) or not value:
+            raise serializers.ValidationError('translations must be a non-empty object.')
+
+        allowed_languages = set(TAG_TRANSLATION_LANGUAGES)
+        provided_languages = set(value)
+        unknown_languages = provided_languages - allowed_languages
+        if unknown_languages:
+            raise serializers.ValidationError(
+                f'Unsupported languages: {", ".join(sorted(unknown_languages))}. '
+                f'Allowed languages: {", ".join(TAG_TRANSLATION_LANGUAGES)}.',
+            )
+
+        if not self.partial:
+            missing_languages = allowed_languages - provided_languages
+            if missing_languages:
+                raise serializers.ValidationError(
+                    f'Missing required languages: {", ".join(sorted(missing_languages))}.',
+                )
+
+        for language_code, payload in value.items():
+            if not isinstance(payload, dict):
+                raise serializers.ValidationError({language_code: 'Translation value must be an object.'})
+
+            raw_name = payload.get('name')
+            if raw_name is None:
+                raise serializers.ValidationError({language_code: {'name': 'This field is required.'}})
+
+            payload['name'] = validate_serializer_name(str(raw_name))
+            duplicated = Tag.objects.filter(
+                translations__language_code=language_code,
+                translations__name=payload['name'],
+            )
+            if self.instance:
+                duplicated = duplicated.exclude(pk=self.instance.pk)
+            if duplicated.exists():
+                raise serializers.ValidationError(
+                    {language_code: {'name': 'A tag with this name already exists for this language.'}},
+                )
+
         return value
+
+    def to_representation(self, instance: Tag) -> dict:
+        """Return all supported languages even if a translation is missing.
+
+        Returns:
+            dict: Serialized tag payload with ru, en and de language keys.
+        """
+        data = super().to_representation(instance)
+        existing_translations = data.get('translations', {})
+        data['translations'] = {
+            language_code: {'name': existing_translations.get(language_code, {}).get('name')}
+            for language_code in TAG_TRANSLATION_LANGUAGES
+        }
+        return data
+
+    def save(self, **kwargs: Any) -> Tag:
+        """Save tag and derive slug from preferred translation when needed.
+
+        Returns:
+            Tag: Saved tag instance.
+        """
+        validated_data = cast('dict[str, dict[str, dict[str, str]]]', self.validated_data)
+        translations = validated_data.get('translations', {})
+        slug_source = (
+            translations.get('en', {}).get('name')
+            or translations.get('ru', {}).get('name')
+            or translations.get('de', {}).get('name')
+        )
+        if slug_source and not self.instance and not kwargs.get('slug'):
+            kwargs['slug'] = slugify(slug_source)
+        return cast('Tag', super().save(**kwargs))
 
 
 class BookSerializer(serializers.ModelSerializer):
@@ -152,6 +225,75 @@ class BookWriteSerializer(BookSerializer):
     )
     authors = serializers.PrimaryKeyRelatedField(many=True, queryset=Author.objects.all(), required=True)
 
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        """Log and normalize raw tags payload before DRF field conversion.
+
+        Args:
+            data (Any): Raw incoming request payload.
+
+        Raises:
+            serializers.ValidationError: If DRF field validation fails.
+
+        Returns:
+            dict[str, Any]: Parsed serializer payload.
+        """
+        raw_tags = data.get('tags') if hasattr(data, 'get') else None
+        raw_tags_list = data.getlist('tags') if hasattr(data, 'getlist') else None
+        logger.warning('[BookWriteSerializer.to_internal_value] raw tags = %r', raw_tags)
+        logger.warning('[BookWriteSerializer.to_internal_value] raw tags getlist = %r', raw_tags_list)
+
+        normalized_data = data
+        mutable_data = data.copy() if hasattr(data, 'copy') else data
+
+        tag_tokens: list[Any] = []
+
+        # DRF can pass tags as a list (JSON body) or as query params (getlist).
+        # We normalize both formats to an iterable of values.
+        if raw_tags_list is not None:
+            raw_tag_values = raw_tags_list
+        elif isinstance(raw_tags, list):
+            raw_tag_values = raw_tags
+        elif raw_tags is not None:
+            raw_tag_values = [raw_tags]
+        else:
+            raw_tag_values = None
+
+        if raw_tag_values is not None:
+            for raw_value in raw_tag_values:
+                if isinstance(raw_value, str) and ',' in raw_value:
+                    tag_tokens.extend(part.strip() for part in raw_value.split(',') if part.strip())
+                elif raw_value not in {None, ''}:
+                    tag_tokens.append(raw_value)
+
+            coerced_tag_ids: list[int] = []
+            for token in tag_tokens:
+                try:
+                    coerced_tag_ids.append(int(token))
+                except (TypeError, ValueError) as exc:
+                    raise serializers.ValidationError({'tags': [f'Invalid tag id: {token!r}.']}) from exc
+
+            if hasattr(mutable_data, 'setlist'):
+                mutable_data.setlist('tags', coerced_tag_ids)
+                logger.warning(
+                    '[BookWriteSerializer.to_internal_value] normalized tags getlist = %r',
+                    mutable_data.getlist('tags'),
+                )
+            elif isinstance(mutable_data, dict):
+                mutable_data['tags'] = coerced_tag_ids
+                logger.warning(
+                    '[BookWriteSerializer.to_internal_value] normalized tags list = %r',
+                    mutable_data.get('tags'),
+                )
+            normalized_data = mutable_data
+
+        try:
+            validated = super().to_internal_value(normalized_data)
+            logger.warning('[BookWriteSerializer.to_internal_value] parsed tags = %r', validated.get('tags'))
+            return cast('dict[str, Any]', validated)
+        except serializers.ValidationError as exc:
+            logger.warning('[BookWriteSerializer.to_internal_value] validation error detail = %r', exc.detail)
+            raise
+
     def validate(self, attrs: dict) -> dict:
         """Validate cross-field business rules.
 
@@ -163,6 +305,7 @@ class BookWriteSerializer(BookSerializer):
         """
         authors = attrs.get('authors')
         tags = attrs.get('tags', [])
+        logger.warning('[BookWriteSerializer.validate] tags = %r', tags)
         book_type = attrs.get('book_type', BookType.BOOK)
         pages_total = attrs.get('pages_total')
         chapters_total = attrs.get('chapters_total')
@@ -200,6 +343,18 @@ class BookWriteSerializer(BookSerializer):
                 )
 
         return attrs
+
+    def validate_tags(self, value: list[Tag]) -> list[Tag]:  # noqa: PLR6301
+        """Log parsed tags payload for write serializer debugging.
+
+        Args:
+            value (list[Tag]): Parsed list of tag instances.
+
+        Returns:
+            list[Tag]: Unchanged parsed tags list.
+        """
+        logger.warning('[BookWriteSerializer.validate_tags] value = %r', value)
+        return value
 
     def validate_description(self, value: str) -> str:  # noqa: PLR6301
         """Validate that the description does not contain control characters.
