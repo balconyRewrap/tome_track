@@ -193,6 +193,9 @@ EMAIL_USE_TLS = env.bool('EMAIL_USE_TLS', default=True)
 EMAIL_HOST_USER = env('EMAIL_HOST_USER', default='')  # pyright: ignore[reportArgumentType]
 EMAIL_HOST_PASSWORD = env('EMAIL_HOST_PASSWORD', default='')  # pyright: ignore[reportArgumentType]
 DEFAULT_FROM_EMAIL = env('DEFAULT_FROM_EMAIL', default='noreply@example.com')  # pyright: ignore[reportArgumentType]
+ADMIN_ERROR_EMAILS = env.list('ADMIN_ERROR_EMAILS', default=[])  # pyright: ignore[reportArgumentType]
+ADMINS = [('Admin', email) for email in ADMIN_ERROR_EMAILS if email]
+SERVER_EMAIL = env('SERVER_EMAIL', default=DEFAULT_FROM_EMAIL)  # pyright: ignore[reportArgumentType]
 
 # Celery
 CELERY_BROKER_URL = env('REDIS_URL')
@@ -255,6 +258,11 @@ SIMPLE_JWT = {
 # logging
 LOGGING = {
     'version': 1,
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse',
+        },
+    },
     'formatters': {
         'verbose': {
             'format': '[{asctime}] {levelname} {name} {message}',
@@ -277,6 +285,12 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
+        'mail_admins': {
+            'level': 'ERROR',
+            'filters': ['require_debug_false'],
+            'class': 'django.utils.log.AdminEmailHandler',
+            'include_html': True,
+        },
     },
     'root': {
         'handlers': ['file', 'console'],
@@ -289,7 +303,7 @@ LOGGING = {
             'propagate': False,
         },
         'django.request': {
-            'handlers': ['file', 'console'],
+            'handlers': ['file', 'console', 'mail_admins'],
             'level': 'INFO',
             'propagate': False,
         },
