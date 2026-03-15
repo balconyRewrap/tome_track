@@ -50,13 +50,19 @@ def userbook_cache_key(
 @extend_schema_view(
     list=extend_schema(
         summary='List user books',
-        description='Returns a paginated list of the current user\'s books. Cached per user.',
+        description=(
+            'Returns a paginated list of the current user\'s books. Cached per user. '
+            'Permissions: authenticated users.'
+        ),
         responses={200: UserBookSerializer(many=True)},
         tags=['UserBooks'],
     ),
     retrieve=extend_schema(
         summary='Retrieve a user book',
-        description='Returns details of a single UserBook by ID. Requires ownership or admin role.',
+        description=(
+            'Returns details of a single UserBook by ID. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         responses={
             200: UserBookSerializer,
             404: OpenApiResponse(description='UserBook not found.'),
@@ -65,7 +71,10 @@ def userbook_cache_key(
     ),
     create=extend_schema(
         summary='Add a book to user list',
-        description='Creates a new UserBook entry for the current user.',
+        description=(
+            'Creates a new UserBook entry for the current user. '
+            'Permissions: authenticated users.'
+        ),
         request=UserBookWriteSerializer,
         responses={
             201: UserBookWriteSerializer,
@@ -77,7 +86,10 @@ def userbook_cache_key(
     update=extend_schema(exclude=True),
     partial_update=extend_schema(
         summary='Update a user book',
-        description='Partially updates a UserBook entry. The book field cannot be changed.',
+        description=(
+            'Partially updates a UserBook entry. The book field cannot be changed. '
+            'Permissions: owner or admin.'
+        ),
         request=UserBookUpdateSerializer,
         responses={
             200: UserBookUpdateSerializer,
@@ -90,7 +102,10 @@ def userbook_cache_key(
     ),
     destroy=extend_schema(
         summary='Delete a user book',
-        description='Removes a UserBook entry. Requires ownership or admin role.',
+        description=(
+            'Removes a UserBook entry. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         responses={
             204: OpenApiResponse(description='UserBook deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),

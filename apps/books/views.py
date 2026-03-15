@@ -50,6 +50,7 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
         summary='List books',
         description=(
             'Returns a paginated list of all books. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required). '
             'Supports ordering via ?ordering=average_rating, -average_rating, '
             'ratings_count, -ratings_count, created_at, -created_at.'
         ),
@@ -68,7 +69,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     retrieve=extend_schema(
         summary='Retrieve a book',
-        description='Returns details of a single book by ID. Public endpoint, cached.',
+        description=(
+            'Returns details of a single book by ID. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={
             200: BookSerializer,
             404: OpenApiResponse(description='Book not found.'),
@@ -77,7 +81,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     create=extend_schema(
         summary='Create a book',
-        description='Creates a new book. Requires authentication.',
+        description=(
+            'Creates a new book. Requires authentication. '
+            'Permissions: authenticated users.'
+        ),
         request=BookWriteSerializer,
         responses={
             201: BookWriteSerializer,
@@ -104,7 +111,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     update=extend_schema(
         summary='Update a book',
-        description='Fully replaces a book. Requires ownership or admin role.',
+        description=(
+            'Fully replaces a book. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         request=BookWriteSerializer,
         responses={
             200: BookWriteSerializer,
@@ -117,7 +127,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     partial_update=extend_schema(
         summary='Partially update a book',
-        description='Updates one or more fields of a book. Requires ownership or admin role.',
+        description=(
+            'Updates one or more fields of a book. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         request=BookWriteSerializer,
         responses={
             200: BookWriteSerializer,
@@ -130,7 +143,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
     ),
     destroy=extend_schema(
         summary='Delete a book',
-        description='Permanently deletes a book. Requires ownership or admin role.',
+        description=(
+            'Permanently deletes a book. Requires ownership or admin role. '
+            'Permissions: owner or admin.'
+        ),
         responses={
             204: OpenApiResponse(description='Book deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
@@ -211,7 +227,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         description=(
             'Search books by title with trigram similarity (supports typos). '
             'Combine with author, tag, book_type, and country filters. '
-            'Omitting q returns all books. Results are cached for 3 minutes.'
+            'Omitting q returns all books. Results are cached for 3 minutes. '
+            'Permissions: anyone (no authentication required).'
         ),
         parameters=[
             OpenApiParameter('q', str, description='Search query — supports typos via trigram similarity.'),
@@ -309,13 +326,19 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(
         summary='List authors',
-        description='Returns a paginated list of all authors. Public endpoint, cached.',
+        description=(
+            'Returns a paginated list of all authors. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={200: AuthorSerializer(many=True)},
         tags=['Authors'],
     ),
     retrieve=extend_schema(
         summary='Retrieve an author',
-        description='Returns details of a single author by ID. Public endpoint, cached.',
+        description=(
+            'Returns details of a single author by ID. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={
             200: AuthorSerializer,
             404: OpenApiResponse(description='Author not found.'),
@@ -324,7 +347,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     create=extend_schema(
         summary='Create an author',
-        description='Creates a new author. Requires authentication.',
+        description=(
+            'Creates a new author. Requires authentication. '
+            'Permissions: authenticated users.'
+        ),
         responses={
             201: AuthorSerializer,
             400: OpenApiResponse(description='Validation error.'),
@@ -334,7 +360,10 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     destroy=extend_schema(
         summary='Delete an author',
-        description='Permanently deletes an author. Requires admin role.',
+        description=(
+            'Permanently deletes an author. Requires admin role. '
+            'Permissions: admin users.'
+        ),
         responses={
             204: OpenApiResponse(description='Author deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),
@@ -394,7 +423,8 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         summary='List tags',
         description=(
             'Returns a paginated list of all tags. Public endpoint, cached. '
-            'Each tag includes translations for ru, en, and de plus a non-translated slug.'
+            'Each tag includes translations for ru, en, and de plus a non-translated slug. '
+            'Permissions: anyone (no authentication required).'
         ),
         responses={200: TagSerializer(many=True)},
         examples=[
@@ -432,7 +462,10 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     retrieve=extend_schema(
         summary='Retrieve a tag',
-        description='Returns a single tag by ID with translations for ru, en, and de. Public endpoint, cached.',
+        description=(
+            'Returns a single tag by ID with translations for ru, en, and de. Public endpoint, cached. '
+            'Permissions: anyone (no authentication required).'
+        ),
         responses={
             200: TagSerializer,
             404: OpenApiResponse(description='Tag not found.'),
@@ -443,6 +476,7 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         summary='Create a tag',
         description=(
             'Creates a new tag. Requires admin role. '
+            'Permissions: admin users. '
             'Request must contain translations for all supported languages (ru, en, de). '
             'Slug is language-independent and generated automatically if omitted.'
         ),
@@ -482,7 +516,10 @@ class AuthorViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     ),
     destroy=extend_schema(
         summary='Delete a tag',
-        description='Permanently deletes a tag. Requires admin role.',
+        description=(
+            'Permanently deletes a tag. Requires admin role. '
+            'Permissions: admin users.'
+        ),
         responses={
             204: OpenApiResponse(description='Tag deleted successfully.'),
             401: OpenApiResponse(description='Authentication credentials were not provided.'),

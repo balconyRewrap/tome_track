@@ -44,8 +44,11 @@ def review_cache_key(
 @extend_schema_view(
     list=extend_schema(
         summary="List reviews",
-        description="Returns a paginated list of reviews for a book. "
-        "Authenticated users also see their own private reviews. Staff see all reviews.",
+        description=(
+            "Returns a paginated list of reviews for a book. "
+            "Authenticated users also see their own private reviews. Staff see all reviews. "
+            "Permissions: anyone (no authentication required)."
+        ),
         parameters=[
             OpenApiParameter(name='book_pk', location=OpenApiParameter.PATH, description="Book ID", type=int),
         ],
@@ -54,9 +57,12 @@ def review_cache_key(
     ),
     retrieve=extend_schema(
         summary="Retrieve a review",
-        description="Returns the details of a single review. "
-        "Anonymous users can only retrieve public reviews."
-        "Authenticated users can also retrieve their own private reviews.",
+        description=(
+            "Returns the details of a single review. "
+            "Anonymous users can only retrieve public reviews. "
+            "Authenticated users can also retrieve their own private reviews. "
+            "Permissions: anyone (no authentication required)."
+        ),
         parameters=[
             OpenApiParameter(name='book_pk', location=OpenApiParameter.PATH, description="Book ID", type=int),
             OpenApiParameter(name='id', location=OpenApiParameter.PATH, description="Review ID", type=int),
@@ -69,7 +75,10 @@ def review_cache_key(
     ),
     create=extend_schema(
         summary="Create a review",
-        description="Creates a new review for a book. Each user can leave only one review per book.",
+        description=(
+            "Creates a new review for a book. Each user can leave only one review per book. "
+            "Permissions: authenticated users."
+        ),
         parameters=[
             OpenApiParameter(name='book_pk', location=OpenApiParameter.PATH, description="Book ID", type=int),
         ],
@@ -83,7 +92,10 @@ def review_cache_key(
     ),
     partial_update=extend_schema(
         summary="Partial update a review",
-        description="Updates one or more fields of an existing review. Only the owner or admin can update.",
+        description=(
+            "Updates one or more fields of an existing review. Only the owner or admin can update. "
+            "Permissions: owner or admin."
+        ),
         parameters=[
             OpenApiParameter(name='book_pk', location=OpenApiParameter.PATH, description="Book ID", type=int),
             OpenApiParameter(name='id', location=OpenApiParameter.PATH, description="Review ID", type=int),
@@ -99,7 +111,10 @@ def review_cache_key(
     ),
     destroy=extend_schema(
         summary="Delete a review",
-        description="Deletes a review. Only the owner or admin can delete.",
+        description=(
+            "Deletes a review. Only the owner or admin can delete. "
+            "Permissions: owner or admin."
+        ),
         parameters=[
             OpenApiParameter(name='book_pk', location=OpenApiParameter.PATH, description="Book ID", type=int),
             OpenApiParameter(name='id', location=OpenApiParameter.PATH, description="Review ID", type=int),
@@ -113,8 +128,11 @@ def review_cache_key(
     ),
     search=extend_schema(
         summary="Search reviews",
-        description="Searches reviews of a book by name and body using trigram similarity. "
-        "Returns results ordered by relevance.",
+        description=(
+            "Searches reviews of a book by name and body using trigram similarity. "
+            "Returns results ordered by relevance. "
+            "Permissions: anyone (no authentication required)."
+        ),
         parameters=[
             OpenApiParameter(name='book_pk', location=OpenApiParameter.PATH, description="Book ID", type=int),
             OpenApiParameter(

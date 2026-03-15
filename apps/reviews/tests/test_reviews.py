@@ -305,6 +305,35 @@ class TestReviewCreate:
         assert response.status_code == status.HTTP_201_CREATED
         assert '  ' not in response.data['body']
 
+    def test_create_preserves_supported_rich_text_tags(self, api_client, user, book):
+        api_client.force_authenticate(user=user)
+        rich_text = (
+            '<h2>Hi there</h2><p>this is a <em>basic</em> example of '
+            '<strong>Tiptap</strong>.</p><ul><li><p>First item</p></li></ul>'
+            '<pre><code>body {\n  display: none;\n}</code></pre>'
+            '<blockquote><p>Great!<br>Really great.</p></blockquote>'
+        )
+
+        response = api_client.post(reviews_url(book.pk), _review_payload(body=rich_text), format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert '<h2>Hi there</h2>' in response.data['body']
+        assert '<em>basic</em>' in response.data['body']
+        assert '<strong>Tiptap</strong>' in response.data['body']
+        assert '<ul><li><p>First item</p></li></ul>' in response.data['body']
+        assert '<pre><code>body {' in response.data['body']
+        assert '<blockquote><p>Great!<br>Really great.</p></blockquote>' in response.data['body']
+
+    def test_create_strips_script_tag_but_keeps_text(self, api_client, user, book):
+        api_client.force_authenticate(user=user)
+        payload = _review_payload(body='<p>Safe text.</p><script>alert("xss")</script>')
+
+        response = api_client.post(reviews_url(book.pk), payload, format='json')
+
+        assert response.status_code == status.HTTP_201_CREATED
+        assert '<script>' not in response.data['body']
+        assert 'alert("xss")' in response.data['body']
+
     def test_create_increments_review_count(self, api_client, user, book):
         api_client.force_authenticate(user=user)
         before = Review.objects.filter(book=book).count()

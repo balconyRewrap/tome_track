@@ -46,10 +46,11 @@ from apps.users.views.user import (
     UserMeView,
 )
 
+django_admin_path = getattr(settings, 'DJANGO_ADMIN_PATH', 'admin/')
 # admin
 urlpatterns = [
-    path('admin/clear-cache/', clear_all_cache, name='admin-clear-cache'),
-    path('admin/', admin.site.urls),
+    path(f'{django_admin_path}clear-cache/', clear_all_cache, name='admin-clear-cache'),
+    path(f'{django_admin_path}', admin.site.urls),
 ]
 
 # auth
@@ -101,16 +102,16 @@ urlpatterns += [
     path('api/v1/books/<int:pk>/', books_detail, name='book_detail'),
 ]
 
-authors = AuthorViewSet.as_view({'get': 'list', 'post': 'create', 'delete': 'destroy'})
-authors_detail = AuthorViewSet.as_view({'get': 'retrieve'})
+authors = AuthorViewSet.as_view({'get': 'list', 'post': 'create'})
+authors_detail = AuthorViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'})
 
 urlpatterns += [
     path('api/v1/authors/', authors, name='authors'),
     path('api/v1/authors/<int:pk>/', authors_detail, name='author-detail'),
 ]
 
-tags = TagViewSet.as_view({'get': 'list', 'post': 'create', 'delete': 'destroy'})
-tags_detail = TagViewSet.as_view({'get': 'retrieve'})
+tags = TagViewSet.as_view({'get': 'list', 'post': 'create'})
+tags_detail = TagViewSet.as_view({'get': 'retrieve', 'delete': 'destroy'})
 
 urlpatterns += [
     path('api/v1/tags/', tags, name='tags'),

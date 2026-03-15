@@ -327,6 +327,7 @@ ADMIN_SITE_HEADER = "Book Tracker Admin"
 ADMIN_SITE_TITLE = "Book Tracker Admin"
 ADMIN_INDEX_TITLE = "Book Tracker Administration"
 ALLOWED_ADMIN_IPS = env.list('ALLOWED_ADMIN_IPS', default=['127.0.0.1'])  # pyright: ignore[reportArgumentType]
+DJANGO_ADMIN_PATH = env('DJANGO_ADMIN_PATH', default='admin/')  # pyright: ignore[reportArgumentType]
 
 # static
 STATIC_URL = 'static/'

@@ -1,12 +1,12 @@
 """Cache Utils for tome track."""
 import functools
+import logging
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 from django.core.cache import cache
 from rest_framework.request import Request
 from rest_framework.response import Response
-import logging
 
 _F = TypeVar('_F', bound=Callable[..., Response])
 
@@ -15,8 +15,6 @@ def invalidate_cache_prefix(prefix: str) -> None:
     """Invalidate all cache entries that start with the given prefix."""
     # cache func is only for redis, so we can use client.keys to find keys to delete
     client = cache.client.get_client()  # pyright: ignore[reportAttributeAccessIssue]
-    logger = logging.getLogger(__name__)
-    logger.info(f"Keys matching '*{prefix}*': {client.keys(f'*{prefix}*')}")
     for key in client.keys(f'*cache_page.{prefix}*'):
         client.delete(key)
     for key in client.keys(f'*cache_header.{prefix}*'):

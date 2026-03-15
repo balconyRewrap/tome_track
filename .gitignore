@@ -171,3 +171,7 @@ task.md
 media/*
 
 todo.md
+
+docker-compose.dev.yml
+
+dist/*

@@ -1,11 +1,14 @@
 """Models for book app."""
+from io import BytesIO
 from typing import Any, Final
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex
+from django.core.files.base import ContentFile
 from django.db import models
 from django.utils.text import slugify
 from parler.models import TranslatableModel, TranslatedFields
+from PIL import Image, ImageOps
 
 from apps.common.models import TimestampedModel
 from apps.common.validators import validate_model_cover_image
@@ -131,3 +134,30 @@ class Book(TimestampedModel):
             models.Index(fields=['book_type']),
             models.Index(fields=['country']),
         ]
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Save book and convert cover image to WebP when needed."""
+        self._ensure_cover_is_webp()
+        super().save(*args, **kwargs)
+
+    def _ensure_cover_is_webp(self) -> None:
+        """Convert cover to WebP before saving if source file is not WebP."""
+        if not self.cover or self.cover.name.lower().endswith('.webp'):
+            return
+
+        self.cover.open('rb')
+        with Image.open(self.cover) as source_image:
+            normalized_image = ImageOps.exif_transpose(source_image)
+
+            has_alpha = normalized_image.mode in {'RGBA', 'LA'} or (
+                normalized_image.mode == 'P' and 'transparency' in normalized_image.info
+            )
+            converted = normalized_image.convert('RGBA' if has_alpha else 'RGB')
+
+            output = BytesIO()
+            converted.save(output, format='WEBP', quality=85, method=6)
+
+        output.seek(0)
+        original_name = self.cover.name.rsplit('/', maxsplit=1)[-1]
+        base_name = original_name.rsplit('.', maxsplit=1)[0]
+        self.cover.save(f'{base_name}.webp', ContentFile(output.read()), save=False)

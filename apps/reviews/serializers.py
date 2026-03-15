@@ -9,6 +9,35 @@ from apps.common.validators import validate_serializer_name
 from apps.reviews.models import REVIEW_MAX_LENGTH, Review
 
 MAX_WORD_LENGTH = 200
+ALLOWED_REVIEW_HTML_TAGS = [
+    'a',
+    'b',
+    'blockquote',
+    'br',
+    'code',
+    'em',
+    'h1',
+    'h2',
+    'h3',
+    'h4',
+    'h5',
+    'h6',
+    'hr',
+    'i',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    's',
+    'strong',
+    'u',
+    'ul',
+]
+ALLOWED_REVIEW_HTML_ATTRIBUTES = {
+    'a': ['href', 'title', 'target', 'rel'],
+    'code': ['class'],
+}
+ALLOWED_REVIEW_HTML_PROTOCOLS = ['http', 'https', 'mailto']
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -92,7 +121,6 @@ class ReviewWriteSerializer(ReviewSerializer):
         if len(value) > REVIEW_MAX_LENGTH:
             raise serializers.ValidationError('Review body cannot exceed 10,000 characters.')
         value = value.strip()
-
         if not value:
             raise serializers.ValidationError('Review body cannot be empty.')
 
@@ -103,7 +131,15 @@ class ReviewWriteSerializer(ReviewSerializer):
         if any(len(word) > MAX_WORD_LENGTH for word in value.split()):
             raise serializers.ValidationError("Too long word in text.")
 
-        # delete extra spaces
-        value = re.sub(r'\s+', ' ', value).strip()
+        # Preserve formatting for rich-text input while still normalizing plain text.
+        if not re.search(r'<[^>]+>', value):
+            value = re.sub(r'\s+', ' ', value).strip()
 
-        return bleach.clean(value, tags=['b', 'i', 'p'], strip=True)
+        return bleach.clean(
+            value,
+            tags=ALLOWED_REVIEW_HTML_TAGS,
+            attributes=ALLOWED_REVIEW_HTML_ATTRIBUTES,
+            protocols=ALLOWED_REVIEW_HTML_PROTOCOLS,
+            strip=True,
+            strip_comments=True,
+        )

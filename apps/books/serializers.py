@@ -1,4 +1,5 @@
 """Serializers for Books application."""
+import logging
 from typing import Any, cast
 
 import bleach
@@ -9,6 +10,8 @@ from rest_framework import serializers
 
 from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, TAG_TRANSLATION_LANGUAGES, Author, Book, BookType, Tag
 from apps.common.validators import validate_serializer_name
+
+logger = logging.getLogger(__name__)
 
 
 # Annotating the *class* (not the instance) is the only reliable way to override
@@ -222,6 +225,75 @@ class BookWriteSerializer(BookSerializer):
     )
     authors = serializers.PrimaryKeyRelatedField(many=True, queryset=Author.objects.all(), required=True)
 
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        """Log and normalize raw tags payload before DRF field conversion.
+
+        Args:
+            data (Any): Raw incoming request payload.
+
+        Raises:
+            serializers.ValidationError: If DRF field validation fails.
+
+        Returns:
+            dict[str, Any]: Parsed serializer payload.
+        """
+        raw_tags = data.get('tags') if hasattr(data, 'get') else None
+        raw_tags_list = data.getlist('tags') if hasattr(data, 'getlist') else None
+        logger.warning('[BookWriteSerializer.to_internal_value] raw tags = %r', raw_tags)
+        logger.warning('[BookWriteSerializer.to_internal_value] raw tags getlist = %r', raw_tags_list)
+
+        normalized_data = data
+        mutable_data = data.copy() if hasattr(data, 'copy') else data
+
+        tag_tokens: list[Any] = []
+
+        # DRF can pass tags as a list (JSON body) or as query params (getlist).
+        # We normalize both formats to an iterable of values.
+        if raw_tags_list is not None:
+            raw_tag_values = raw_tags_list
+        elif isinstance(raw_tags, list):
+            raw_tag_values = raw_tags
+        elif raw_tags is not None:
+            raw_tag_values = [raw_tags]
+        else:
+            raw_tag_values = None
+
+        if raw_tag_values is not None:
+            for raw_value in raw_tag_values:
+                if isinstance(raw_value, str) and ',' in raw_value:
+                    tag_tokens.extend(part.strip() for part in raw_value.split(',') if part.strip())
+                elif raw_value not in {None, ''}:
+                    tag_tokens.append(raw_value)
+
+            coerced_tag_ids: list[int] = []
+            for token in tag_tokens:
+                try:
+                    coerced_tag_ids.append(int(token))
+                except (TypeError, ValueError) as exc:
+                    raise serializers.ValidationError({'tags': [f'Invalid tag id: {token!r}.']}) from exc
+
+            if hasattr(mutable_data, 'setlist'):
+                mutable_data.setlist('tags', coerced_tag_ids)
+                logger.warning(
+                    '[BookWriteSerializer.to_internal_value] normalized tags getlist = %r',
+                    mutable_data.getlist('tags'),
+                )
+            elif isinstance(mutable_data, dict):
+                mutable_data['tags'] = coerced_tag_ids
+                logger.warning(
+                    '[BookWriteSerializer.to_internal_value] normalized tags list = %r',
+                    mutable_data.get('tags'),
+                )
+            normalized_data = mutable_data
+
+        try:
+            validated = super().to_internal_value(normalized_data)
+            logger.warning('[BookWriteSerializer.to_internal_value] parsed tags = %r', validated.get('tags'))
+            return cast('dict[str, Any]', validated)
+        except serializers.ValidationError as exc:
+            logger.warning('[BookWriteSerializer.to_internal_value] validation error detail = %r', exc.detail)
+            raise
+
     def validate(self, attrs: dict) -> dict:
         """Validate cross-field business rules.
 
@@ -233,6 +305,7 @@ class BookWriteSerializer(BookSerializer):
         """
         authors = attrs.get('authors')
         tags = attrs.get('tags', [])
+        logger.warning('[BookWriteSerializer.validate] tags = %r', tags)
         book_type = attrs.get('book_type', BookType.BOOK)
         pages_total = attrs.get('pages_total')
         chapters_total = attrs.get('chapters_total')
@@ -270,6 +343,18 @@ class BookWriteSerializer(BookSerializer):
                 )
 
         return attrs
+
+    def validate_tags(self, value: list[Tag]) -> list[Tag]:  # noqa: PLR6301
+        """Log parsed tags payload for write serializer debugging.
+
+        Args:
+            value (list[Tag]): Parsed list of tag instances.
+
+        Returns:
+            list[Tag]: Unchanged parsed tags list.
+        """
+        logger.warning('[BookWriteSerializer.validate_tags] value = %r', value)
+        return value
 
     def validate_description(self, value: str) -> str:  # noqa: PLR6301
         """Validate that the description does not contain control characters.
