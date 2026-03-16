@@ -170,7 +170,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
             Value(Decimal(0)),
         ),
         ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
-    ).order_by('-updated_at')
+    ).order_by('-id')
     serializer_class = BookSerializer
     # MultiPartParser + FormParser are required for file (cover image) uploads.
     # JSONParser is kept so that requests without a file still work normally.
@@ -178,7 +178,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = BookFilter
     ordering_fields = ['average_rating', 'ratings_count', 'created_at']
-    ordering = ['-updated_at']
+    ordering = ['-id']
     permission_classes_by_action = {
         'list': [AllowAny],
         'retrieve': [AllowAny],
