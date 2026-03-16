@@ -55,7 +55,7 @@ def validate_serializer_name(value: str) -> str:
     if not value:
         raise DRFValidationError("Name cannot be empty.")
     # Allow question marks for titles like "Who?" or "Why?".
-    if not re.match(r"^[\w\s.,'()\-:?!]+$", value):
+    if not re.match(r"^[\w\s.,'()\-:?!—]+$", value):
         raise DRFValidationError('Name cannot contain invalid characters.')
     if re.search(r"[\x00-\x1F]", value):
         raise DRFValidationError("Name cannot contain control characters.")
