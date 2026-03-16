@@ -3,6 +3,7 @@ import logging
 from typing import Any, cast
 
 import bleach
+from django.http import QueryDict
 from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema_field
 from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
@@ -225,6 +226,16 @@ class BookWriteSerializer(BookSerializer):
     )
     authors = serializers.PrimaryKeyRelatedField(many=True, queryset=Author.objects.all(), required=True)
 
+    @staticmethod
+    def _clone_request_data(data: Any) -> Any:
+        """Return mutable payload clone without deep-copying uploaded file objects."""
+        if isinstance(data, QueryDict):
+            mutable_data = QueryDict('', mutable=True)
+            for key, values in data.lists():
+                mutable_data.setlist(key, list(values))
+            return mutable_data
+        return data.copy() if hasattr(data, 'copy') else data
+
     def to_internal_value(self, data: Any) -> dict[str, Any]:
         """Log and normalize raw tags payload before DRF field conversion.
 
@@ -243,7 +254,6 @@ class BookWriteSerializer(BookSerializer):
         logger.warning('[BookWriteSerializer.to_internal_value] raw tags getlist = %r', raw_tags_list)
 
         normalized_data = data
-        mutable_data = data.copy() if hasattr(data, 'copy') else data
 
         tag_tokens: list[Any] = []
 
@@ -272,6 +282,7 @@ class BookWriteSerializer(BookSerializer):
                 except (TypeError, ValueError) as exc:
                     raise serializers.ValidationError({'tags': [f'Invalid tag id: {token!r}.']}) from exc
 
+            mutable_data = self._clone_request_data(data)
             if hasattr(mutable_data, 'setlist'):
                 mutable_data.setlist('tags', coerced_tag_ids)
                 logger.warning(
