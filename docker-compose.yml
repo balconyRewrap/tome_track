@@ -10,8 +10,6 @@ services:
       - ./media:/app/media
       - ./logs:/app/logs
       - static_volume:/app/staticfiles
-    env_file:
-      - .env.production
     depends_on:
       - db
       - redis
@@ -23,8 +21,6 @@ services:
     ports:
       - "80:80"
       - "443:443"
-    env_file:
-      - .env.production
     volumes:
       - ./nginx/entrypoint.sh:/entrypoint.sh:ro
       - ./nginx/nginx-http.conf.template:/etc/nginx/templates/http.conf.template:ro
@@ -40,8 +36,6 @@ services:
 
   certbot:
     image: certbot/certbot:latest
-    env_file:
-      - .env.production
     volumes:
       - certbot_www:/var/www/certbot
       - letsencrypt:/etc/letsencrypt
@@ -70,8 +64,6 @@ services:
     volumes:
       - .:/app
       - ./logs:/app/logs
-    env_file:
-      - .env.production
     depends_on:
       - db
       - redis
@@ -81,8 +73,6 @@ services:
     command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     volumes:
       - .:/app
-    env_file:
-      - .env.production
     depends_on:
       - db
       - redis
@@ -90,8 +80,6 @@ services:
 
   db:
     image: postgres:16
-    env_file:
-      - .env.production
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
