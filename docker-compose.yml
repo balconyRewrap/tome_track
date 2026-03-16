@@ -22,17 +22,47 @@ services:
     image: nginx:1.27-alpine
     ports:
       - "80:80"
+      - "443:443"
     env_file:
       - .env.production
-    environment:
-      DJANGO_ADMIN_PATH: ${DJANGO_ADMIN_PATH}
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/templates/default.conf.template:ro
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+      - ./nginx/nginx-http.conf.template:/etc/nginx/templates/http.conf.template:ro
+      - ./nginx/nginx-https.conf.template:/etc/nginx/templates/https.conf.template:ro
       - ./dist:/usr/share/nginx/html:ro
       - static_volume:/app/staticfiles:ro
       - ./media:/app/media:ro
+      - certbot_www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    command: /bin/sh /entrypoint.sh
     depends_on:
       - django
+
+  certbot:
+    image: certbot/certbot:latest
+    env_file:
+      - .env.production
+    volumes:
+      - certbot_www:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    depends_on:
+      - nginx
+    entrypoint: >
+      /bin/sh -c "if [ -z \"$$DOMAIN_NAME\" ] || [ -z \"$$LETSENCRYPT_EMAIL\" ]; then
+                    echo 'DOMAIN_NAME and LETSENCRYPT_EMAIL must be set in .env.production';
+                    exit 1;
+                  fi;
+                  while :; do
+                    if [ \"$$LETSENCRYPT_STAGING\" = \"1\" ]; then
+                      staging_arg='--staging';
+                    else
+                      staging_arg='';
+                    fi;
+                    certbot certonly --webroot -w /var/www/certbot \
+                      --email \"$$LETSENCRYPT_EMAIL\" --agree-tos --no-eff-email \
+                      -d \"$$DOMAIN_NAME\" --non-interactive --keep-until-expiring $$staging_arg || true;
+                    sleep 12h;
+                  done"
 
   celery_worker:
     build: .
@@ -86,3 +116,5 @@ volumes:
   pg_data:
   redis_data:
   static_volume:
+  certbot_www:
+  letsencrypt:
