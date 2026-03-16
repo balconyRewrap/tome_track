@@ -58,9 +58,7 @@ services:
                     else
                       staging_arg='';
                     fi;
-                    certbot certonly --webroot -w /var/www/certbot \
-                      --email \"$$LETSENCRYPT_EMAIL\" --agree-tos --no-eff-email \
-                      -d \"$$DOMAIN_NAME\" --non-interactive --keep-until-expiring $$staging_arg || true;
+                    certbot certonly --webroot -w /var/www/certbot --email \"$$LETSENCRYPT_EMAIL\" --agree-tos --no-eff-email -d \"$$DOMAIN_NAME\" --non-interactive --keep-until-expiring $$staging_arg || true;
                     sleep 12h;
                   done"
 
