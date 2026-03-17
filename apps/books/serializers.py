@@ -327,12 +327,13 @@ class BookWriteSerializer(BookSerializer):
             effective_authors = list(self.instance.authors.all())
         return effective_title, list(effective_authors or [])
 
-    def _validate_duplicate_book(self, title: str | None, authors: list[Author]) -> None:
+    def _validate_duplicate_book(self, title: str | None, authors: list[Author], book_type: BookType) -> None:
         """Reject save when a book with same title and author already exists.
 
         Args:
             title (str | None): Effective book title.
             authors (list[Author]): Effective list of authors.
+            book_type (BookType): Effective book type.
 
         Raises:
             serializers.ValidationError: If duplicate title+author pair is found.
@@ -343,6 +344,7 @@ class BookWriteSerializer(BookSerializer):
         duplicate_books = Book.objects.filter(
             title__iexact=title,
             authors__in=authors,
+            book_type=book_type,
         ).distinct()
         if self.instance:
             duplicate_books = duplicate_books.exclude(pk=self.instance.pk)
