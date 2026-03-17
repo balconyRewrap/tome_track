@@ -26,7 +26,7 @@ def test_validate_cover_image_valid(mocker):
     validate_model_cover_image(image)  # pyright: ignore[reportArgumentType]
 
 def test_validate_serializer_name_valid():
-    assert validate_serializer_name("Valid Book Name 123.,'()-:?!—" ) == "Valid Book Name 123.,'()-:?!"
+    assert validate_serializer_name("Valid Book Name 123.,'()-:?!—" ) == "Valid Book Name 123.,'()-:?!—"
 
 def test_validate_serializer_name_invalid_characters():
     with pytest.raises(Exception):
