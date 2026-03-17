@@ -158,7 +158,7 @@ urlpatterns += [
 
 # health check
 urlpatterns += [
-    re_path(r'^health_check/?$', HealthCheckView.as_view(), name='health_check'),
+    path('api/v1/health_check/', HealthCheckView.as_view(), name='health_check'),
 ]
 
 # debug
