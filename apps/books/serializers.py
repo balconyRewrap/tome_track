@@ -327,13 +327,13 @@ class BookWriteSerializer(BookSerializer):
             effective_authors = list(self.instance.authors.all())
         return effective_title, list(effective_authors or [])
 
-    def _validate_duplicate_book(self, title: str | None, authors: list[Author], book_type: BookType) -> None:
+    def _validate_duplicate_book(self, title: str | None, authors: list[Author], book_type: str) -> None:
         """Reject save when a book with same title and author already exists.
 
         Args:
             title (str | None): Effective book title.
             authors (list[Author]): Effective list of authors.
-            book_type (BookType): Effective book type.
+            book_type (str): Effective book type.
 
         Raises:
             serializers.ValidationError: If duplicate title+author pair is found.
@@ -399,14 +399,14 @@ class BookWriteSerializer(BookSerializer):
         authors = attrs.get('authors')
         tags = attrs.get('tags', [])
         logger.warning('[BookWriteSerializer.validate] tags = %r', tags)
-        book_type = attrs.get('book_type', BookType.BOOK)
+        book_type = attrs.get('book_type', getattr(self.instance, 'book_type', BookType.BOOK))
         if authors is not None and len(authors) > AUTHOR_MAX_COUNT:
             raise serializers.ValidationError(
                 {'authors': f'A book can have at most {AUTHOR_MAX_COUNT} authors.'},
             )
 
         effective_title, effective_authors = self._get_effective_title_and_authors(attrs)
-        self._validate_duplicate_book(effective_title, effective_authors)
+        self._validate_duplicate_book(effective_title, effective_authors, book_type)
 
         if len(tags) > TAG_MAX_COUNT:
             raise serializers.ValidationError(
