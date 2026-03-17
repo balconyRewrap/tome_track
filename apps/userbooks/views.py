@@ -7,6 +7,7 @@ from django.db.models import QuerySet
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import OpenApiResponse, extend_schema, extend_schema_view
 from rest_framework import viewsets
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -16,7 +17,12 @@ from apps.common.mixins import ActionPermissionsMixin
 from apps.common.permissions import IsOwnerOrAdmin
 from apps.userbooks.filters import UserBookFilter
 from apps.userbooks.models import UserBook
-from apps.userbooks.serializers import UserBookSerializer, UserBookUpdateSerializer, UserBookWriteSerializer
+from apps.userbooks.serializers import (
+    TotalPagesReadSerializer,
+    UserBookSerializer,
+    UserBookUpdateSerializer,
+    UserBookWriteSerializer,
+)
 from apps.users.models import User
 
 USERBOOKS_CACHE_TTL = getattr(settings, 'USERBOOKS_CACHE_TTL', 60 * 60)
@@ -157,12 +163,6 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         Returns:
             QuerySet: the queryset of UserBook objects for the current user or all if admin.
         """
-        if (
-            self.request.user.is_authenticated
-            and isinstance(self.request.user, User)
-            and self.request.user.role == 'admin'
-        ):
-            return UserBook.objects.select_related('book', 'user').all().order_by('id')
         return UserBook.objects.filter(user=self.request.user).order_by('id')
 
     # pyright is ignored, because cache_response decorator changes the signature of the method
@@ -184,6 +184,23 @@ class UserBookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
             Response: The details of the UserBook object.
         """
         return super().retrieve(request, *args, **kwargs)
+
+    @extend_schema(
+        summary='Total pages read',
+        description=(
+            'Returns the total number of pages read across all user books for the current user. '
+            'If user is an admin, returns the total across all users.'
+        ),
+        responses={200: TotalPagesReadSerializer},
+        tags=['UserBooks'],
+    )
+    @cache_response(timeout=USERBOOKS_CACHE_TTL, key_func=userbook_cache_key)
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated], url_path='total_pages_read')
+    def total_pages_read(self, request: Request, *args: Any, **kwargs: Any) -> Response:
+        """Return the total pages read for the current user."""
+        queryset = self.get_queryset().select_related('book')
+        total = sum(userbook.pages_read for userbook in queryset)
+        return Response({'total_pages_read': total})
 
     def perform_create(self, serializer: UserBookSerializer) -> None:
         """Override perform_create to set the user and invalidate cache.

@@ -19,6 +19,8 @@ from apps.users.models import User
 pytestmark = pytest.mark.django_db
 
 USERBOOKS_URL = reverse('userbooks')
+USERBOOKS_TOTAL_PAGES_URL = reverse('userbooks-total-pages-read')
+
 
 def userbook_detail_url(pk: int) -> str:
     return reverse('userbook-detail', kwargs={'pk': pk})
@@ -337,4 +339,53 @@ def test_destroy_invalidates_cache(api_client, user, book, userbook):
     after = api_client.get(USERBOOKS_URL)
     ids = [i['id'] for i in after.data.get('results', after.data)]
     assert userbook.pk not in ids
+
+
+def test_total_pages_read_requires_auth(api_client):
+    response = api_client.get(USERBOOKS_TOTAL_PAGES_URL)
+    assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+
+def test_total_pages_read_calculation(api_client, user, book):
+    api_client.force_authenticate(user=user)
+    # full reread counts as pages_total per reread, plus current page progress
+    UserBook.objects.create(
+        user=user,
+        book=book,
+        status=ReadingStatus.COMPLETED,
+        reread_times=2,
+        current_page=10,
+    )
+
+    response = api_client.get(USERBOOKS_TOTAL_PAGES_URL)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['total_pages_read'] == book.pages_total * 2 + 10
+
+
+def test_total_pages_read_estimates_from_chapters(api_client, user, author, tag):
+    api_client.force_authenticate(user=user)
+    # Create a book with chapters and pages to estimate read pages
+    b = Book.objects.create(
+        title='Chapters Book',
+        title_en='Chapters Book',
+        description='Test book with chapters.',
+        book_type='book',
+        pages_total=200,
+        chapters_total=10,
+        country='US',
+        user=user,
+    )
+    b.authors.set([author])
+    b.tags.set([tag])
+
+    UserBook.objects.create(
+        user=user,
+        book=b,
+        status=ReadingStatus.READING,
+        current_chapter=3,
+    )
+
+    response = api_client.get(USERBOOKS_TOTAL_PAGES_URL)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data['total_pages_read'] == 60
 
