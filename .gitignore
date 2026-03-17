@@ -175,3 +175,7 @@ todo.md
 docker-compose.dev.yml
 
 dist/*
+
+scripts/*
+
+.env.dev

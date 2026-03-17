@@ -1,7 +1,11 @@
 """Tests for BookViewSet — all endpoints and all possible situations."""
+from io import BytesIO
+
 import pytest
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APIClient
 
@@ -120,6 +124,12 @@ def _book_payload(author: Author, tag: Tag | None = None, **overrides) -> dict:
     return payload
 
 
+def _uploaded_png_cover() -> SimpleUploadedFile:
+    output = BytesIO()
+    Image.new('RGB', (16, 16), color='blue').save(output, format='PNG')
+    return SimpleUploadedFile('cover.png', output.getvalue(), content_type='image/png')
+
+
 
 # LIST  GET /api/v1/books/
 
@@ -197,6 +207,28 @@ def test_create_book_authenticated_returns_201(api_client, user, author, tag):
     response = api_client.post(BOOKS_URL, _book_payload(author, tag), format='json')
     assert response.status_code == status.HTTP_201_CREATED
     assert response.data['title'] == 'New Book'
+
+
+def test_create_book_multipart_with_cover_and_multiple_tags_returns_201(api_client, user, author, settings, tmp_path):
+    """Multipart create with cover and tags should not crash and should persist tags."""
+    settings.MEDIA_ROOT = tmp_path
+    first_tag = Tag.objects.create(name='First Tag', slug='first-tag')
+    second_tag = Tag.objects.create(name='Second Tag', slug='second-tag')
+
+    api_client.force_authenticate(user=user)
+    payload = {
+        'title': 'Multipart Book',
+        'title_en': 'Multipart Book EN',
+        'authors': [author.pk],
+        'book_type': 'book',
+        'pages_total': 220,
+        'tags': [str(first_tag.pk), str(second_tag.pk)],
+        'cover': _uploaded_png_cover(),
+    }
+
+    response = api_client.post(BOOKS_URL, payload, format='multipart')
+    assert response.status_code == status.HTTP_201_CREATED
+    assert sorted(response.data['tags']) == sorted([first_tag.pk, second_tag.pk])
 
 
 def test_create_book_sets_user_to_requester(api_client, user, author, tag):

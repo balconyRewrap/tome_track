@@ -3,6 +3,7 @@ import logging
 from typing import Any, cast
 
 import bleach
+from django.http import QueryDict
 from django.utils.text import slugify
 from drf_spectacular.utils import extend_schema_field
 from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
@@ -225,6 +226,23 @@ class BookWriteSerializer(BookSerializer):
     )
     authors = serializers.PrimaryKeyRelatedField(many=True, queryset=Author.objects.all(), required=True)
 
+    @staticmethod
+    def _clone_request_data(data: Any) -> Any:
+        """Return mutable payload clone without deep-copying uploaded file objects.
+
+        Args:
+            data (Any): Raw request payload.
+
+        Returns:
+            Any: A mutable copy suitable for serializer normalization.
+        """
+        if isinstance(data, QueryDict):
+            mutable_data = QueryDict('', mutable=True)
+            for key, values in data.lists():
+                mutable_data.setlist(key, list(values))
+            return mutable_data
+        return data.copy() if hasattr(data, 'copy') else data
+
     def to_internal_value(self, data: Any) -> dict[str, Any]:
         """Log and normalize raw tags payload before DRF field conversion.
 
@@ -243,7 +261,6 @@ class BookWriteSerializer(BookSerializer):
         logger.warning('[BookWriteSerializer.to_internal_value] raw tags getlist = %r', raw_tags_list)
 
         normalized_data = data
-        mutable_data = data.copy() if hasattr(data, 'copy') else data
 
         tag_tokens: list[Any] = []
 
@@ -272,6 +289,7 @@ class BookWriteSerializer(BookSerializer):
                 except (TypeError, ValueError) as exc:
                     raise serializers.ValidationError({'tags': [f'Invalid tag id: {token!r}.']}) from exc
 
+            mutable_data = self._clone_request_data(data)
             if hasattr(mutable_data, 'setlist'):
                 mutable_data.setlist('tags', coerced_tag_ids)
                 logger.warning(
@@ -294,6 +312,81 @@ class BookWriteSerializer(BookSerializer):
             logger.warning('[BookWriteSerializer.to_internal_value] validation error detail = %r', exc.detail)
             raise
 
+    def _get_effective_title_and_authors(self, attrs: dict[str, Any]) -> tuple[str | None, list[Author]]:
+        """Return title and authors that should be used for duplicate checks.
+
+        Args:
+            attrs (dict[str, Any]): Incoming serializer attributes.
+
+        Returns:
+            tuple[str | None, list[Author]]: Effective title and author list for create/update validation.
+        """
+        effective_title = cast('str | None', attrs.get('title', getattr(self.instance, 'title', None)))
+        effective_authors = attrs.get('authors')
+        if effective_authors is None and self.instance is not None:
+            effective_authors = list(self.instance.authors.all())
+        return effective_title, list(effective_authors or [])
+
+    def _validate_duplicate_book(self, title: str | None, authors: list[Author], book_type: str) -> None:
+        """Reject save when a book with same title and author already exists.
+
+        Args:
+            title (str | None): Effective book title.
+            authors (list[Author]): Effective list of authors.
+            book_type (str): Effective book type.
+
+        Raises:
+            serializers.ValidationError: If duplicate title+author pair is found.
+        """
+        if not title or not authors:
+            return
+
+        duplicate_books = Book.objects.filter(
+            title__iexact=title,
+            authors__in=authors,
+            book_type=book_type,
+        ).distinct()
+        if self.instance:
+            duplicate_books = duplicate_books.exclude(pk=self.instance.pk)
+        if duplicate_books.exists():
+            raise serializers.ValidationError(
+                {'title': 'A book with this title and author already exists.'},
+            )
+
+    def _validate_required_counts(self, attrs: dict[str, Any], book_type: str) -> None:
+        """Validate required pages_total/chapters_total based on book type.
+
+        Args:
+            attrs (dict[str, Any]): Incoming serializer attributes.
+            book_type (str): Effective type of book.
+
+        Raises:
+            serializers.ValidationError: If required counter field is missing for selected book type.
+        """
+        if not self.partial:
+            if book_type == BookType.BOOK and not attrs.get('pages_total'):
+                raise serializers.ValidationError(
+                    {'pages_total': 'pages_total is required for book type "book".'},
+                )
+            if book_type == BookType.COMIC and not attrs.get('chapters_total'):
+                raise serializers.ValidationError(
+                    {'chapters_total': 'chapters_total is required for book type "comic".'},
+                )
+            return
+
+        existing_pages = getattr(self.instance, 'pages_total', None)
+        existing_chapters = getattr(self.instance, 'chapters_total', None)
+        effective_pages = attrs.get('pages_total', existing_pages)
+        effective_chapters = attrs.get('chapters_total', existing_chapters)
+        if book_type == BookType.BOOK and not effective_pages:
+            raise serializers.ValidationError(
+                {'pages_total': 'pages_total is required for book type "book".'},
+            )
+        if book_type == BookType.COMIC and not effective_chapters:
+            raise serializers.ValidationError(
+                {'chapters_total': 'chapters_total is required for book type "comic".'},
+            )
+
     def validate(self, attrs: dict) -> dict:
         """Validate cross-field business rules.
 
@@ -306,41 +399,20 @@ class BookWriteSerializer(BookSerializer):
         authors = attrs.get('authors')
         tags = attrs.get('tags', [])
         logger.warning('[BookWriteSerializer.validate] tags = %r', tags)
-        book_type = attrs.get('book_type', BookType.BOOK)
-        pages_total = attrs.get('pages_total')
-        chapters_total = attrs.get('chapters_total')
+        book_type = attrs.get('book_type', getattr(self.instance, 'book_type', BookType.BOOK))
         if authors is not None and len(authors) > AUTHOR_MAX_COUNT:
             raise serializers.ValidationError(
                 {'authors': f'A book can have at most {AUTHOR_MAX_COUNT} authors.'},
             )
 
+        effective_title, effective_authors = self._get_effective_title_and_authors(attrs)
+        self._validate_duplicate_book(effective_title, effective_authors, book_type)
+
         if len(tags) > TAG_MAX_COUNT:
             raise serializers.ValidationError(
                 {'tags': f'A book can have at most {TAG_MAX_COUNT} tags.'},
             )
-        if not self.partial:
-            if book_type == BookType.BOOK and not pages_total:
-                raise serializers.ValidationError(
-                    {'pages_total': 'pages_total is required for book type "book".'},
-                )
-
-            if book_type == BookType.COMIC and not chapters_total:
-                raise serializers.ValidationError(
-                    {'chapters_total': 'chapters_total is required for book type "comic".'},
-                )
-        else:
-            existing_pages = getattr(self.instance, 'pages_total', None)
-            existing_chapters = getattr(self.instance, 'chapters_total', None)
-            effective_pages = attrs.get('pages_total', existing_pages)
-            effective_chapters = attrs.get('chapters_total', existing_chapters)
-            if book_type == BookType.BOOK and not effective_pages:
-                raise serializers.ValidationError(
-                    {'pages_total': 'pages_total is required for book type "book".'},
-                )
-            if book_type == BookType.COMIC and not effective_chapters:
-                raise serializers.ValidationError(
-                    {'chapters_total': 'chapters_total is required for book type "comic".'},
-                )
+        self._validate_required_counts(attrs, book_type)
 
         return attrs
 

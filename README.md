@@ -8,6 +8,8 @@
 
 **TomeTrack** is a REST API backend for a personal book-tracking application. It lets users manage their reading library, track progress and statuses, write reviews, and get book recommendations — all through a clean, documented API.
 
+✅ **Live example:** A fully working frontend is available at https://books.tometrack.de/ (uses this backend).
+
 ## Table of Contents
 
 - [Features](#features)
@@ -138,25 +140,31 @@ Review ──────────► Book
 The application runs fully containerised. The request flow is:
 
 ```
-Client → Nginx (port 80) → Gunicorn → Django → PostgreSQL
+Client → Nginx (ports 80/443) → Gunicorn → Django → PostgreSQL
                                          │
                                        Redis
                                          │
                                     Celery Worker / Beat
 ```
 
-- **Nginx** serves static files directly and proxies API requests to Gunicorn
+- **Nginx** serves static files directly, handles TLS termination, and proxies API requests to Gunicorn
+- **Certbot** requests and renews Let's Encrypt certificates automatically using the `http-01` challenge
 - **Gunicorn** runs 3 workers by default (configurable)
 - **Celery Worker** handles async tasks (e.g. password reset emails)
 - **Celery Beat** manages periodic/scheduled tasks using `django-celery-beat` and a database scheduler
 
-To deploy:
+To deploy with HTTPS:
 
 ```bash
-cp .env.example .env_production
-# fill in all required production values
+cp .env.example .env.production
+# fill in all required production values, including:
+# DOMAIN_NAME=api.your-domain.com
+# LETSENCRYPT_EMAIL=admin@your-domain.com
+# LETSENCRYPT_STAGING=1  # 1 for first dry runs, then switch to 0
 docker-compose up --build -d
 ```
+
+When certificates are issued, Nginx automatically switches from HTTP-only config to HTTPS with `80 -> 443` redirect.
 
 ## Getting Started
 
@@ -176,17 +184,20 @@ cd tome_track
 
 # 2. Create the environment file
 cp .env.example .env.production
-# Edit .env_production and fill in all required values
+# Edit .env.production and fill in all required values
 
 # 3. Build and start all services
 docker-compose up --build
 ```
 
-The API will be available at **http://localhost**.
+The API will be available at:
+- **http://<your-domain>** during initial certificate challenge
+- **https://<your-domain>** after the first successful certificate issue
 
 Services started:
 - `django` — application server (Gunicorn)
-- `nginx` — reverse proxy on port 80
+- `nginx` — reverse proxy and TLS terminator on ports 80/443
+- `certbot` — Let's Encrypt issuance + renewal loop
 - `db` — PostgreSQL 16
 - `redis` — Redis 7
 - `celery_worker` — async task worker

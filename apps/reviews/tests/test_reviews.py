@@ -290,7 +290,7 @@ class TestReviewCreate:
 
     def test_create_body_exceeds_max_length_returns_400(self, api_client, user, book):
         api_client.force_authenticate(user=user)
-        response = api_client.post(reviews_url(book.pk), _review_payload(body='x ' * 5001), format='json')
+        response = api_client.post(reviews_url(book.pk), _review_payload(body='x ' * 50001), format='json')
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_create_name_with_control_chars_returns_400(self, api_client, user, book):

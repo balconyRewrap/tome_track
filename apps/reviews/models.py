@@ -5,7 +5,7 @@ from apps.books.models import Book
 from apps.common.models import TimestampedModel
 from apps.users.models import User
 
-REVIEW_MAX_LENGTH = 10_000
+REVIEW_MAX_LENGTH = 50_000
 NAME_MAX_LENGTH = 150
 
 

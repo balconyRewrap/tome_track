@@ -26,6 +26,7 @@ from apps.books.views import (
     TagViewSet,
 )
 from apps.common.admin import clear_all_cache
+from apps.common.views import HealthCheckView
 from apps.reviews.views import ReviewViewSet, UserMeReviewsView
 from apps.userbooks.views import UserBookViewSet
 from apps.users.views.admin import (
@@ -153,6 +154,11 @@ urlpatterns += [
 # testing views:
 urlpatterns += [
     path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
+]
+
+# health check
+urlpatterns += [
+    path('api/v1/health_check/', HealthCheckView.as_view(), name='health_check'),
 ]
 
 # debug
