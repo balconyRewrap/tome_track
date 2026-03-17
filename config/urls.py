@@ -17,7 +17,7 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from apps.books.views import (
@@ -26,6 +26,7 @@ from apps.books.views import (
     TagViewSet,
 )
 from apps.common.admin import clear_all_cache
+from apps.common.views import HealthCheckView
 from apps.reviews.views import ReviewViewSet, UserMeReviewsView
 from apps.userbooks.views import UserBookViewSet
 from apps.users.views.admin import (
@@ -153,6 +154,11 @@ urlpatterns += [
 # testing views:
 urlpatterns += [
     path('api/v1/auth/check/', AuthCheckView.as_view(), name='auth_check'),
+]
+
+# health check
+urlpatterns += [
+    re_path(r'^health_check/?$', HealthCheckView.as_view(), name='health_check'),
 ]
 
 # debug
