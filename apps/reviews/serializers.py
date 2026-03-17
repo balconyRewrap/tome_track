@@ -29,6 +29,7 @@ ALLOWED_REVIEW_HTML_TAGS = [
     'p',
     'pre',
     's',
+    'span',
     'strong',
     'u',
     'ul',
@@ -36,6 +37,7 @@ ALLOWED_REVIEW_HTML_TAGS = [
 ALLOWED_REVIEW_HTML_ATTRIBUTES = {
     'a': ['href', 'title', 'target', 'rel'],
     'code': ['class'],
+    'span': ['data-spoiler'],
 }
 ALLOWED_REVIEW_HTML_PROTOCOLS = ['http', 'https', 'mailto']
 
