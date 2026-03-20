@@ -152,3 +152,9 @@ class UserBookUpdateSerializer(UserBookWriteSerializer):
                 'Current page can be set only for books of type "book".',
             )
         return super().validate(attrs)
+
+
+class TotalPagesReadSerializer(serializers.Serializer):
+    """Serializer for total pages read for the current user."""
+
+    total_pages_read = serializers.IntegerField()

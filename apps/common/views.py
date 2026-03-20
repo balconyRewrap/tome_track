@@ -5,16 +5,23 @@ in multiple places (e.g. health checks, feature-agnostic endpoints).
 """
 
 from drf_spectacular.utils import extend_schema
+from rest_framework import serializers
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK
 from rest_framework.views import APIView
 
 
+class HealthCheckSerializer(serializers.Serializer):
+    """Serializer for health check endpoint response."""
+
+    status = serializers.CharField()
+
+
 @extend_schema(
     summary="Health check endpoint",
     description="Returns 200 OK if the application is running.",
-    responses={200: "OK"},
+    responses={200: HealthCheckSerializer},
     tags=["Health"],
 )
 class HealthCheckView(APIView):

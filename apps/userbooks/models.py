@@ -63,6 +63,40 @@ class UserBook(TimestampedModel):
             models.Index(fields=['book']),
         ]
 
+    @property
+    def pages_read(self) -> int:
+        """Calculate rough number of pages read by the user for this book.
+
+        Calculation rules:
+        1) If ``reread_times`` is greater than 1 and the book has ``pages_total``,
+           the total is incremented by ``pages_total * reread_times``.
+        2) If ``current_page`` is set, it is added to the total.
+        3) Otherwise, if ``current_chapter`` is set and the book has both
+           ``chapters_total`` and ``pages_total``, a rough estimate is computed as
+           ``pages_total / chapters_total * current_chapter``.
+
+        Returns:
+            int: Estimated pages read for this UserBook.
+        """
+        total = 0
+        book = self.book
+
+        if self.reread_times and self.reread_times > 1 and book and book.pages_total:
+            total += self.reread_times * book.pages_total
+
+        if self.current_page is not None:
+            total += self.current_page
+        elif (
+            self.current_chapter is not None
+            and book
+            and book.pages_total
+            and book.chapters_total
+        ):
+            # Use floor, as we only can estimate pages read.
+            total += int((book.pages_total / book.chapters_total) * self.current_chapter)
+
+        return total
+
     def __str__(self) -> str:
         """Return a string representation of the UserBook.
 

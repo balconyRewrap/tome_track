@@ -129,9 +129,11 @@ userbooks_detail = UserBookViewSet.as_view({
     'patch': 'partial_update',
     'delete': 'destroy',
 })
+userbooks_total_pages = UserBookViewSet.as_view({'get': 'total_pages_read'})
 urlpatterns += [
     path('api/v1/userbooks/', userbooks, name='userbooks'),
     path('api/v1/userbooks/<int:pk>/', userbooks_detail, name='userbook-detail'),
+    path('api/v1/userbooks/total_pages_read/', userbooks_total_pages, name='userbooks-total-pages-read'),
 ]
 
 # reviews
