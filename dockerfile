@@ -15,8 +15,10 @@ RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir --req
 # create non-root user for runtime
 RUN addgroup --system app && adduser --system --ingroup app app
 
-# copy app files and set ownership to non-root user
+# prepare directories and set ownership to non-root user
+RUN mkdir -p /log /app/staticfiles /app/media /dist
 COPY --chown=app:app . .
+RUN chown -R app:app /app /log /app/staticfiles /app/media /dist
 
 USER app
 
