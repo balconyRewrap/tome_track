@@ -50,11 +50,53 @@ class AuthorSerializer(serializers.ModelSerializer):
         return value
 
 
+class TagTranslationsRuSerializer(serializers.Serializer):
+    """Tag translations payload for Russian locale."""
+
+    name = serializers.CharField(max_length=100, validators=[validate_serializer_name])
+
+
+class TagTranslationsEnSerializer(serializers.Serializer):
+    """Tag translations payload for English locale."""
+
+    name = serializers.CharField(max_length=100, validators=[validate_serializer_name])
+
+
+class TagTranslationsDeSerializer(serializers.Serializer):
+    """Tag translations payload for German locale."""
+
+    name = serializers.CharField(max_length=100, validators=[validate_serializer_name])
+
+
+class TagTranslationsSerializer(serializers.Serializer):
+    """Group translations under language keys."""
+
+    ru = TagTranslationsRuSerializer()
+    en = TagTranslationsEnSerializer()
+    de = TagTranslationsDeSerializer()
+
+
+@extend_schema_field(
+    {
+        'type': 'object',
+        'required': ['ru', 'en', 'de'],
+        'properties': {
+            'ru': {'$ref': '#/components/schemas/TagTranslationsRu'},
+            'en': {'$ref': '#/components/schemas/TagTranslationsEn'},
+            'de': {'$ref': '#/components/schemas/TagTranslationsDe'},
+        },
+    },
+)
+class TagTranslatedFieldsField(TranslatedFieldsField):
+    """Custom field to provide explicit openapi schema for translations."""
+
+
 class TagSerializer(TranslatableModelSerializer):
     """Serializer for Tag model with explicit translations payload."""
 
     slug = serializers.SlugField(read_only=True)
-    translations = TranslatedFieldsField(shared_model=Tag)
+
+    translations = TagTranslatedFieldsField(shared_model=Tag)
 
     class Meta:  # noqa: D106
         model = Tag
@@ -74,7 +116,6 @@ class TagSerializer(TranslatableModelSerializer):
         """
         if not isinstance(value, dict) or not value:
             raise serializers.ValidationError('translations must be a non-empty object.')
-
         allowed_languages = set(TAG_TRANSLATION_LANGUAGES)
         provided_languages = set(value)
         unknown_languages = provided_languages - allowed_languages
@@ -243,66 +284,124 @@ class BookWriteSerializer(BookSerializer):
             return mutable_data
         return data.copy() if hasattr(data, 'copy') else data
 
-    def to_internal_value(self, data: Any) -> dict[str, Any]:
-        """Log and normalize raw tags payload before DRF field conversion.
+    @staticmethod
+    def _get_raw_tags(data: Any) -> tuple[Any | None, Any | None]:
+        """Extract raw tags values from request payload.
 
         Args:
-            data (Any): Raw incoming request payload.
-
-        Raises:
-            serializers.ValidationError: If DRF field validation fails.
+            data (Any): Raw request payload.
 
         Returns:
-            dict[str, Any]: Parsed serializer payload.
+            tuple[Any | None, Any | None]: Tuple contains raw tags value and raw tags list from getlist(), if available.
         """
         raw_tags = data.get('tags') if hasattr(data, 'get') else None
         raw_tags_list = data.getlist('tags') if hasattr(data, 'getlist') else None
+        return raw_tags, raw_tags_list
+
+    @staticmethod
+    def _normalize_raw_tag_values(raw_tags: Any | None, raw_tags_list: Any | None) -> list[Any] | None:
+        """Normalize raw tags into a list-of-values or None.
+
+        Args:
+            raw_tags (Any | None): The raw 'tags' (a single value, a list, or None).
+            raw_tags_list (Any | None): The optional raw 'tags' list extracted from the request using getlist().
+
+        Returns:
+            list[Any] | None: Normalized list of tag values ready for token extraction, or None if no tags.
+        """
+        if raw_tags_list is not None:
+            return raw_tags_list
+        if isinstance(raw_tags, list):
+            return raw_tags
+        if raw_tags is not None:
+            return [raw_tags]
+        return None
+
+    @staticmethod
+    def _extract_tag_tokens(raw_tag_values: list[Any]) -> list[Any]:
+        """Split tag tokens by comma and drop empty values.
+
+        Args:
+            raw_tag_values (list[Any]): List of raw tag values extracted from the request.
+
+        Returns:
+            list[Any]: A flat list of individual tag tokens ready for coercion into tag ids.
+        """
+        tokens: list[Any] = []
+        for raw_value in raw_tag_values:
+            if isinstance(raw_value, str) and ',' in raw_value:
+                tokens.extend(part.strip() for part in raw_value.split(',') if part.strip())
+            elif raw_value not in {None, ''}:
+                tokens.append(raw_value)
+        return tokens
+
+    @staticmethod
+    def _coerce_tag_ids(tag_tokens: list[Any]) -> list[int]:
+        """Convert any tag token into integer tag id or raise validation error.
+
+        Args:
+            tag_tokens (list[Any]): List of raw tag tokens extracted from the request.
+
+        Raises:
+            serializers.ValidationError: If any token cannot be coerced into an integer tag id.
+
+        Returns:
+            list[int]: List of coerced integer tag ids ready for serializer processing.
+        """
+        coerced_tag_ids: list[int] = []
+        for token in tag_tokens:
+            try:
+                coerced_tag_ids.append(int(token))
+            except (TypeError, ValueError) as exc:
+                raise serializers.ValidationError({'tags': [f'Invalid tag id: {token!r}.']}) from exc
+        return coerced_tag_ids
+
+    @staticmethod
+    def _apply_normalized_tags(data: Any, coerced_tag_ids: list[int]) -> Any:
+        """Put normalized tags list back into mutable payload copy.
+
+        Args:
+            data (Any): Original request payload.
+            coerced_tag_ids (list[int]): Normalized list of tag ids to set in the payload.
+
+        Returns:
+            Any: A mutable copy of the original payload with normalized tags list.
+        """
+        mutable_data = BookWriteSerializer._clone_request_data(data)
+        if hasattr(mutable_data, 'setlist'):
+            mutable_data.setlist('tags', coerced_tag_ids)
+            logger.warning(
+                '[BookWriteSerializer.to_internal_value] normalized tags getlist = %r',
+                mutable_data.getlist('tags'),
+            )
+        elif isinstance(mutable_data, dict):
+            mutable_data['tags'] = coerced_tag_ids
+            logger.warning(
+                '[BookWriteSerializer.to_internal_value] normalized tags list = %r',
+                mutable_data.get('tags'),
+            )
+        return mutable_data
+
+    def to_internal_value(self, data: Any) -> dict[str, Any]:
+        """Log and normalize raw tags payload before DRF field conversion.
+
+        Raises:
+            serializers.ValidationError: If tags cannot be coerced into a list of integers.
+
+        Returns:
+            dict[str, Any]: Normalized and validated data ready for model instance creation/update.
+        """
+        raw_tags, raw_tags_list = self._get_raw_tags(data)
         logger.warning('[BookWriteSerializer.to_internal_value] raw tags = %r', raw_tags)
         logger.warning('[BookWriteSerializer.to_internal_value] raw tags getlist = %r', raw_tags_list)
 
         normalized_data = data
 
-        tag_tokens: list[Any] = []
-
-        # DRF can pass tags as a list (JSON body) or as query params (getlist).
-        # We normalize both formats to an iterable of values.
-        if raw_tags_list is not None:
-            raw_tag_values = raw_tags_list
-        elif isinstance(raw_tags, list):
-            raw_tag_values = raw_tags
-        elif raw_tags is not None:
-            raw_tag_values = [raw_tags]
-        else:
-            raw_tag_values = None
-
+        raw_tag_values = self._normalize_raw_tag_values(raw_tags, raw_tags_list)
         if raw_tag_values is not None:
-            for raw_value in raw_tag_values:
-                if isinstance(raw_value, str) and ',' in raw_value:
-                    tag_tokens.extend(part.strip() for part in raw_value.split(',') if part.strip())
-                elif raw_value not in {None, ''}:
-                    tag_tokens.append(raw_value)
-
-            coerced_tag_ids: list[int] = []
-            for token in tag_tokens:
-                try:
-                    coerced_tag_ids.append(int(token))
-                except (TypeError, ValueError) as exc:
-                    raise serializers.ValidationError({'tags': [f'Invalid tag id: {token!r}.']}) from exc
-
-            mutable_data = self._clone_request_data(data)
-            if hasattr(mutable_data, 'setlist'):
-                mutable_data.setlist('tags', coerced_tag_ids)
-                logger.warning(
-                    '[BookWriteSerializer.to_internal_value] normalized tags getlist = %r',
-                    mutable_data.getlist('tags'),
-                )
-            elif isinstance(mutable_data, dict):
-                mutable_data['tags'] = coerced_tag_ids
-                logger.warning(
-                    '[BookWriteSerializer.to_internal_value] normalized tags list = %r',
-                    mutable_data.get('tags'),
-                )
-            normalized_data = mutable_data
+            tag_tokens = self._extract_tag_tokens(raw_tag_values)
+            coerced_tag_ids = self._coerce_tag_ids(tag_tokens)
+            normalized_data = self._apply_normalized_tags(data, coerced_tag_ids)
 
         try:
             validated = super().to_internal_value(normalized_data)

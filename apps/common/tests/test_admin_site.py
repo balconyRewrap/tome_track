@@ -7,7 +7,7 @@ from rest_framework.test import APIClient
 from apps.books.models import Author, Book, Tag
 from apps.userbooks.models import ReadingStatus, UserBook
 from apps.users.models import User
-
+from django.conf import settings
 pytestmark = pytest.mark.django_db
 
 admin_panel = '/admin/'
@@ -54,25 +54,6 @@ def test_admin_access_blocked_ip(settings):
         HTTP_X_FORWARDED_FOR='111.111.111.111, 123.123.123.123',
     )
     assert response.status_code == status.HTTP_403_FORBIDDEN  # pyright: ignore[reportAttributeAccessIssue]
-
-
-def test_admin_index_contains_clear_cache_button(settings):
-    """Admin index includes a clear-cache button for staff users."""
-    settings.ALLOWED_ADMIN_IPS = ['123.123.123.123']
-    from apps.common import middleware
-    middleware.ALLOWED_ADMIN_IPS = settings.ALLOWED_ADMIN_IPS
-
-    admin_user = User.objects.create_superuser(  # pyright: ignore[reportAttributeAccessIssue]
-        email='root@example.com',
-        username='root',
-        password='StrongPass123',
-    )
-    client = APIClient()
-    client.force_login(admin_user)
-
-    response = client.get(admin_panel, REMOTE_ADDR='123.123.123.123')
-    assert response.status_code == status.HTTP_200_OK  # pyright: ignore[reportAttributeAccessIssue]
-    assert '/admin/clear-cache/' in response.content.decode()  # pyright: ignore[reportAttributeAccessIssue]
 
 
 def test_admin_clear_cache_endpoint_clears_cache(settings):

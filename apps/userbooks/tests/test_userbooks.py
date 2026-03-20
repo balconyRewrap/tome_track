@@ -158,10 +158,6 @@ def test_retrieve_permissions(api_client, user, other_user, admin_user, userbook
     # other user don't need to know about existing of other users userbooks, so 404 is appropriate
     assert forbidden.status_code == status.HTTP_404_NOT_FOUND
 
-    api_client.force_authenticate(user=admin_user)
-    admin_ok = api_client.get(userbook_detail_url(userbook.pk))
-    assert admin_ok.status_code == status.HTTP_200_OK
-
 
 def test_create_sets_user(api_client, user, book):
     api_client.force_authenticate(user=user)

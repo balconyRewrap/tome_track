@@ -1,0 +1,12 @@
+.git
+
+.env
+
+.venv
+
+.ruff_cache
+
+.pytest_cache
+
+.vscode
+

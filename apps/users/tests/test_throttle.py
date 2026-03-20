@@ -6,6 +6,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from django.contrib.auth import get_user_model
 
+
 REGISTER_URL = reverse("register")
 
 User = get_user_model()
@@ -57,6 +58,7 @@ def test_register_throttle(api_client, db):
     data["email"] = "user29@example.com"
     data["username"] = "user29"
     response = api_client.post(REGISTER_URL, data, REMOTE_ADDR=throttle_remote_addr)
+    print(response.content.decode())  # Debug output to verify the response content
     assert response.status_code == status.HTTP_429_TOO_MANY_REQUESTS
 
 @pytest.mark.throttle
