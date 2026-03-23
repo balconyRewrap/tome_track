@@ -68,6 +68,7 @@ class UserMeView(generics.RetrieveUpdateAPIView):
                     "email": "user@example.com",
                     "username": "user1",
                     "role": "user",
+                    "page_coefficient": 0.0,
                 },
                 response_only=True,
             ),
@@ -104,6 +105,7 @@ class UserMeView(generics.RetrieveUpdateAPIView):
                 "Request example",
                 value={
                     "username": "user1",
+                    "page_coefficient": 1.23,
                 },
                 request_only=True,
             ),
@@ -114,6 +116,7 @@ class UserMeView(generics.RetrieveUpdateAPIView):
                     "email": "user@example.com",
                     "username": "user1",
                     "role": "user",
+                    "page_coefficient": 1.23,
                 },
                 response_only=True,
             ),

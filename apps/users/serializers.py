@@ -127,8 +127,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
         """Meta class for UserProfileSerializer."""
 
         model = User
-        fields = ['id', 'email', 'username', 'role']
+        fields = ['id', 'email', 'username', 'role', 'page_coefficient']
         read_only_fields = ['id', 'email', 'role']
+
+    def validate_page_coefficient(self, value: float) -> float:  # noqa: PLR6301
+        """Validate that the page_coefficient is non-negative.
+
+        Returns:
+            float: The validated page_coefficient value.
+
+        Raises:
+            serializers.ValidationError: If the page_coefficient is negative.
+        """
+        if value is None:
+            return value
+        if value < 0:
+            raise serializers.ValidationError('page_coefficient must be non-negative.')
+        return value
 
 
 class ChangeEmailSerializer(serializers.Serializer):
@@ -238,5 +253,5 @@ class AdminUserSerializer(serializers.ModelSerializer):
 
     class Meta:  # noqa: D106
         model = User
-        fields = ['id', 'email', 'username', 'role', 'is_active', 'created_at']
+        fields = ['id', 'email', 'username', 'role', 'is_active', 'created_at', 'page_coefficient']
         read_only_fields = ['id', 'email', 'username', 'created_at']
