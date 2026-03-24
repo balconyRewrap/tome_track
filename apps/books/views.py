@@ -7,7 +7,7 @@ from typing import Any
 from django.conf import settings
 from django.contrib.postgres.search import TrigramSimilarity
 from django.core.cache import cache
-from django.db.models import Avg, Count, Q, Value
+from django.db.models import Avg, Count, ExpressionWrapper, F, FloatField, Q, QuerySet, Sum, Value
 from django.db.models.functions import Coalesce, Greatest
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
@@ -44,6 +44,10 @@ AUTHOR_CACHE_TTL = getattr(settings, 'AUTHOR_CACHE_TTL', 60 * 60)  # 1 hour
 TAG_CACHE_TTL = getattr(settings, 'TAG_CACHE_TTL', 60 * 60)  # 1 hour
 SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
 
+# Bayesian Average confidence parameter (minimum number of votes).
+# Can be overridden in settings via BAYESIAN_C.
+BAYESIAN_C = getattr(settings, 'BAYESIAN_C', 10)
+
 
 @extend_schema_view(
     list=extend_schema(
@@ -51,7 +55,9 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
         description=(
             'Returns a paginated list of all books. Public endpoint, cached. '
             'Permissions: anyone (no authentication required). '
-            'Supports ordering via ?ordering=average_rating, -average_rating, '
+            'Default ordering is by Bayesian Average rating (descending). '
+            'Supports ordering via ?ordering=bayesian_average, -bayesian_average, '
+            'average_rating, -average_rating, '
             'ratings_count, -ratings_count, created_at, -created_at.'
         ),
         parameters=[
@@ -59,8 +65,10 @@ SEARCH_CACHE_TTL = getattr(settings, 'SEARCH_CACHE_TTL', 60 * 3)  # 3 minutes
                 'ordering',
                 str,
                 description=(
-                    'Sort results. Allowed values: average_rating, -average_rating, '
-                    'ratings_count, -ratings_count, created_at, -created_at.'
+                    'Sort results. Allowed values: bayesian_average, -bayesian_average, '
+                    'average_rating, -average_rating, '
+                    'ratings_count, -ratings_count, created_at, -created_at. '
+                    'Defaults to -bayesian_average.'
                 ),
             ),
         ],
@@ -177,8 +185,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     filter_backends = [DjangoFilterBackend, OrderingFilter]
     filterset_class = BookFilter
-    ordering_fields = ['average_rating', 'ratings_count', 'created_at']
-    ordering = ['-id']
+    ordering_fields = ['bayesian_average', 'average_rating', 'ratings_count', 'created_at']
+    ordering = ['-bayesian_average']
     permission_classes_by_action = {
         'list': [AllowAny],
         'retrieve': [AllowAny],
@@ -203,6 +211,64 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         # pyright somehow complains that the return type is not compatible with the declared return type of
         # BookSerializer, even though it clearly is. So we ignore the type check here.
         return BookSerializer  # pyright: ignore[reportReturnType]
+
+    def _build_book_qs(self) -> QuerySet[Book]:  # noqa: PLR6301
+        """Return a Book queryset annotated with Bayesian Average and standard stats.
+
+        Bayesian Average formula:
+            bayesian_avg = (C * m + sum_ratings) / (C + ratings_count)
+
+        where:
+            C  — confidence constant (``BAYESIAN_C`` setting, default 10)
+            m  — global mean rating across all rated books
+            sum_ratings — total sum of ratings for this book
+            ratings_count — number of ratings for this book
+
+        Returns:
+            QuerySet[Book]: annotated with ``average_rating``, ``ratings_count``,
+            ``sum_ratings``, and ``bayesian_average``.
+        """
+        global_mean = Book.objects.aggregate(
+            m=Coalesce(
+                Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+                Value(0.0),
+                output_field=FloatField(),
+            ),
+        )['m'] or 0.0
+
+        # its math, so even when itc not constant, C should be uppercase according to PEP8
+        C = float(BAYESIAN_C)  # noqa: N806
+        m = float(global_mean)
+
+        return (
+            Book.objects.select_related('parent_book', 'user')
+            .prefetch_related('authors', 'tags')
+            .annotate(
+                average_rating=Coalesce(
+                    Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False), output_field=FloatField()),
+                    Value(0.0, output_field=FloatField()),
+                    output_field=FloatField(),
+                ),
+                ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
+                sum_ratings=Coalesce(
+                    Sum('userbooks__rating', filter=Q(userbooks__rating__isnull=False), output_field=FloatField()),
+                    Value(0.0, output_field=FloatField()),
+                    output_field=FloatField(),
+                ),
+                bayesian_average=ExpressionWrapper(
+                    (Value(C * m) + F('sum_ratings')) / (Value(float(C)) + F('ratings_count')),
+                    output_field=FloatField(),
+                ),
+            )
+        )
+
+    def get_queryset(self) -> QuerySet[Book]:  # pyright: ignore[reportIncompatibleMethodOverride]
+        """Return annotated queryset ordered by Bayesian Average (descending) by default.
+
+        Returns:
+            QuerySet[Book]
+        """
+        return self._build_book_qs().order_by('-bayesian_average')
 
     @method_decorator(cache_page(BOOKS_CACHE_TTL, key_prefix=BOOKS_CACHE_PREFIX))
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -240,7 +306,8 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
                 'ordering',
                 str,
                 description=(
-                    'Sort results. Allowed values: average_rating, -average_rating, '
+                    'Sort results. Allowed values: bayesian_average, -bayesian_average, '
+                    'average_rating, -average_rating, '
                     'ratings_count, -ratings_count, created_at, -created_at. '
                     'When q is set, defaults to trigram similarity.'
                 ),
@@ -265,13 +332,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
         if cached is not None:
             return Response(cached)
 
-        qs = Book.objects.select_related('parent_book', 'user').prefetch_related('authors', 'tags').annotate(
-            average_rating=Coalesce(
-                Avg('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
-                Value(Decimal(0)),
-            ),
-            ratings_count=Count('userbooks__rating', filter=Q(userbooks__rating__isnull=False)),
-        )
+        qs = self._build_book_qs()
 
         if q:
             qs = qs.annotate(
@@ -281,7 +342,7 @@ class BookViewSet(ActionPermissionsMixin, viewsets.ModelViewSet):
                 ),
             ).filter(similarity__gte=0.2).order_by('-similarity')
         else:
-            qs = qs.order_by('id')
+            qs = qs.order_by('-bayesian_average')
 
         book_filter = BookFilter(request.query_params, queryset=qs)
         if not book_filter.is_valid():

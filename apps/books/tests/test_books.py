@@ -1,5 +1,6 @@
 """Tests for BookViewSet — all endpoints and all possible situations."""
 from io import BytesIO
+from decimal import Decimal
 
 import pytest
 from django.core.cache import cache
@@ -10,6 +11,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 
 from apps.books.models import AUTHOR_MAX_COUNT, TAG_MAX_COUNT, Author, Book, Tag
+from apps.books.views import BAYESIAN_C, BookViewSet
+from apps.userbooks.models import UserBook
 from apps.users.models import User
 
 pytestmark = pytest.mark.django_db
@@ -165,6 +168,54 @@ def test_list_books_only_returns_existing_books(api_client, book):
     ids = [item['id'] for item in results]
     assert book.pk in ids
 
+
+def test_list_books_bayesian_average_ordering(api_client, user, other_user, author, tag):
+    """List of books is ordered by bayesian_average correctly."""
+    high_rated = Book.objects.create(
+        title='Highly Rated',
+        title_en='Highly Rated',
+        description='Top book',
+        book_type='book',
+        pages_total=100,
+        country='US',
+        user=user,
+    )
+    high_rated.authors.set([author])
+    high_rated.tags.set([tag])
+
+    low_rated = Book.objects.create(
+        title='Low Rated',
+        title_en='Low Rated',
+        description='Low book',
+        book_type='book',
+        pages_total=100,
+        country='US',
+        user=user,
+    )
+    low_rated.authors.set([author])
+    low_rated.tags.set([tag])
+
+    UserBook.objects.create(user=user, book=high_rated, status='completed', rating=Decimal('10.0'))
+    UserBook.objects.create(user=other_user, book=low_rated, status='completed', rating=Decimal('0.0'))
+
+    response = api_client.get(BOOKS_URL)
+    assert response.status_code == status.HTTP_200_OK
+    results = response.data.get('results', response.data)
+
+    assert results[0]['id'] == high_rated.pk
+    assert results[1]['id'] == low_rated.pk
+
+    # confirm formula use via annotated queryset exactly
+    qs = BookViewSet()._build_book_qs().filter(id__in=[high_rated.pk, low_rated.pk]).order_by('-bayesian_average')
+    db_ids = [book.id for book in qs]  # pyright: ignore
+    assert db_ids == [high_rated.pk, low_rated.pk]
+
+    global_mean = (10.0 + 0.0) / 2
+    expected_high = (BAYESIAN_C * global_mean + 10.0) / (BAYESIAN_C + 1)
+    expected_low = (BAYESIAN_C * global_mean + 0.0) / (BAYESIAN_C + 1)
+
+    assert float(qs.first().bayesian_average) == pytest.approx(expected_high)  # pyright: ignore
+    assert float(qs.last().bayesian_average) == pytest.approx(expected_low)  # pyright: ignore
 
 
 # RETRIEVE  GET /api/v1/books/<pk>/
