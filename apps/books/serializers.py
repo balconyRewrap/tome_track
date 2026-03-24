@@ -5,7 +5,7 @@ from typing import Any, cast
 import bleach
 from django.http import QueryDict
 from django.utils.text import slugify
-from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.utils import extend_schema_field, extend_schema_serializer
 from parler_rest.serializers import TranslatableModelSerializer, TranslatedFieldsField
 from rest_framework import serializers
 
@@ -50,18 +50,21 @@ class AuthorSerializer(serializers.ModelSerializer):
         return value
 
 
+@extend_schema_serializer(description='Russian translation payload for tag.')
 class TagTranslationsRuSerializer(serializers.Serializer):
     """Tag translations payload for Russian locale."""
 
     name = serializers.CharField(max_length=100, validators=[validate_serializer_name])
 
 
+@extend_schema_serializer(description='English translation payload for tag.')
 class TagTranslationsEnSerializer(serializers.Serializer):
     """Tag translations payload for English locale."""
 
     name = serializers.CharField(max_length=100, validators=[validate_serializer_name])
 
 
+@extend_schema_serializer(description='German translation payload for tag.')
 class TagTranslationsDeSerializer(serializers.Serializer):
     """Tag translations payload for German locale."""
 
@@ -76,17 +79,7 @@ class TagTranslationsSerializer(serializers.Serializer):
     de = TagTranslationsDeSerializer()
 
 
-@extend_schema_field(
-    {
-        'type': 'object',
-        'required': ['ru', 'en', 'de'],
-        'properties': {
-            'ru': {'$ref': '#/components/schemas/TagTranslationsRu'},
-            'en': {'$ref': '#/components/schemas/TagTranslationsEn'},
-            'de': {'$ref': '#/components/schemas/TagTranslationsDe'},
-        },
-    },
-)
+@extend_schema_field(TagTranslationsSerializer, component_name='TagTranslatedFields')
 class TagTranslatedFieldsField(TranslatedFieldsField):
     """Custom field to provide explicit openapi schema for translations."""
 

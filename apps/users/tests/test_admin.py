@@ -61,7 +61,20 @@ def test_admin_retrieve_user(api_client, admin_user, user, get_token):
     assert response.status_code == status.HTTP_200_OK
     assert response.data["email"] == user.email
     assert response.data["username"] == user.username
-    assert response.data["role"] == user.role   
+    assert response.data["role"] == user.role
+    assert response.data["page_coefficient"] == 0.0
+
+
+def test_admin_patch_user_page_coefficient(api_client, admin_user, user, get_token):
+    cache.clear()
+    token = get_token(admin_user.email, "StrongPass123")
+    api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {token}")
+
+    url = reverse("admin_user_detail", kwargs={"pk": user.id})
+    response = api_client.patch(url, {"page_coefficient": 3.14}, format="json")
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.page_coefficient == 3.14
 
 def test_admin_invalid_user(api_client, admin_user, user, get_token):
     cache.clear()

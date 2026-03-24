@@ -26,6 +26,32 @@ def test_get_profile(auth_client, user):
     assert response.data["email"] == user.email
     assert response.data["username"] == user.username
     assert response.data["role"] == user.role
+    assert response.data["page_coefficient"] == 0.0
+
+
+def test_patch_profile_page_coefficient_success(auth_client, user):
+    url = reverse("user_me")
+    response = auth_client.patch(url, {"page_coefficient": 1.23}, format="json")
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.page_coefficient == 1.23
+
+
+def test_patch_profile_page_coefficient_is_null(auth_client, user):
+    user.page_coefficient = 2.0
+    user.save()
+    url = reverse("user_me")
+    response = auth_client.patch(url, {"page_coefficient": None}, format="json")
+    assert response.status_code == status.HTTP_200_OK
+    user.refresh_from_db()
+    assert user.page_coefficient is None
+
+
+def test_patch_profile_page_coefficient_negative(auth_client, user):
+    url = reverse("user_me")
+    response = auth_client.patch(url, {"page_coefficient": -1.0}, format="json")
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert "page_coefficient" in response.data["error"]["details"]
 
 def test_patch_profile_username_success(auth_client, user):
     url = reverse("user_me")

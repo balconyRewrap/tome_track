@@ -2,6 +2,7 @@
 from typing import Any
 
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.core.validators import MinValueValidator
 from django.db import models
 
 from apps.common.models import TimestampedModel
@@ -84,6 +85,13 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     is_staff = models.BooleanField(default=False)
 
     token_version = models.PositiveIntegerField(default=0)
+    page_coefficient = models.FloatField(
+        null=True,
+        blank=True,
+        default=0.0,
+        validators=[MinValueValidator(0.0)],
+        help_text='The user-specific reading speed coefficient (relative to an ideal reader).',
+    )
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username']
