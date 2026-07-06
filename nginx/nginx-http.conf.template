@@ -2,6 +2,11 @@ upstream django {
     server django:8000;
 }
 
+map $http_x_forwarded_proto $proxy_x_forwarded_proto {
+    default $http_x_forwarded_proto;
+    "" $scheme;
+}
+
 server {
     listen 80;
     server_name ${SERVER_NAME};
@@ -23,12 +28,16 @@ server {
         access_log off;
     }
 
+    location ~ /\.(?!well-known/) {
+        return 404;
+    }
+
     location /api/ {
         proxy_pass http://django;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $proxy_x_forwarded_proto;
     }
 
     location /${DJANGO_ADMIN_PATH} {
@@ -36,7 +45,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $proxy_x_forwarded_proto;
     }
 
     location / {

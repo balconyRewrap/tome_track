@@ -39,6 +39,10 @@ server {
         access_log off;
     }
 
+    location ~ /\.(?!well-known/) {
+        return 404;
+    }
+
     location /api/ {
         proxy_pass http://django;
         proxy_set_header Host $host;
