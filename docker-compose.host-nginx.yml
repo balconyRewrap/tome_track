@@ -1,0 +1,93 @@
+services:
+  django:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
+    volumes:
+      - .:/app
+      - ./media:/app/media
+      - ./logs:/app/logs
+      - static_volume:/app/staticfiles
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "${TOMETRACK_INTERNAL_HTTP_PORT:-127.0.0.1:18081}:80"
+    env_file:
+      - .env
+    volumes:
+      - ./nginx/entrypoint.sh:/entrypoint.sh:ro
+      - ./nginx/nginx-http.conf.template:/etc/nginx/templates/http.conf.template:ro
+      - ./nginx/nginx-https.conf.template:/etc/nginx/templates/https.conf.template:ro
+      - ./dist:/usr/share/nginx/html:ro
+      - static_volume:/app/staticfiles:ro
+      - ./media:/app/media:ro
+    command: /bin/sh /entrypoint.sh
+    depends_on:
+      - django
+
+  celery_worker:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: celery -A config worker -l info
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  celery_beat:
+    build:
+      context: .
+      dockerfile: dockerfile
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+      - celery_worker
+
+  db:
+    image: postgres:16
+    env_file:
+      - .env
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pg_data:
+  redis_data:
+  static_volume:
