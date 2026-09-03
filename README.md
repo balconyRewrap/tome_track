@@ -1,359 +1,464 @@
 # TomeTrack
 
-![Python](https://img.shields.io/badge/python-3.12-blue)
-![Django](https://img.shields.io/badge/django-6-green)
+![Python](https://img.shields.io/badge/Python-3.12-blue)
+![Django](https://img.shields.io/badge/Django-6-green)
 ![DRF](https://img.shields.io/badge/DRF-3.16-red)
-![Docker](https://img.shields.io/badge/docker-ready-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-blue)
+![Redis](https://img.shields.io/badge/Redis-7-red)
+![Docker](https://img.shields.io/badge/Docker-ready-blue)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-**TomeTrack** is a REST API backend for a personal book-tracking application. It lets users manage their reading library, track progress and statuses, write reviews, and get book recommendations — all through a clean, documented API.
+**TomeTrack** is a production-deployed REST API for a personal book-tracking platform.
 
-✅ **Live example:** A fully working frontend is available at https://books.tometrack.de/ (uses this backend).
+The backend handles authentication, personal libraries, reading progress, reviews, full-text book search, caching, asynchronous jobs, rate limiting, and administrative operations. It is built around a modular Django architecture and runs as a containerized production stack behind Nginx and Gunicorn.
 
-## Table of Contents
+**Live application:** https://books.tometrack.de/
 
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Data Model Overview](#data-model-overview)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-- [Environment Variables](#environment-variables)
-- [API Overview](#api-overview)
-- [Pagination & Filtering](#pagination--filtering)
-- [Security](#security)
-- [Running Tests](#running-tests)
-- [Contributing](#contributing)
-- [License](#license)
+---
 
-## Features
+## Highlights
 
-- **Authentication** — Registration, JWT access/refresh tokens with rotation and blacklisting, logout
-- **Password management** — Change password, reset via email (token-based, async via Celery)
-- **Books** — CRUD, full-text search, cover image uploads, book types (book / comic)
-- **Authors & Tags** — Separate resources linked to books
-- **Personal library (UserBook)** — Track reading status, current page/chapter, re-read count, rating (0–10), masterpiece flag
-- **Reviews** — Per-book reviews with search; list your own reviews via `/users/me/reviews/`
-- **Admin endpoints** — List and manage users via protected admin-only routes
-- **Caching** — Redis-backed caching for frequently accessed data
-- **Rate limiting** — 60 req/min for anonymous users, 300 req/min for authenticated
-- **API docs** — Auto-generated Swagger UI and ReDoc (available in DEBUG mode)
+* Production deployment with **Docker, Nginx, Gunicorn and HTTPS**
+* REST API built with **Django REST Framework**
+* **PostgreSQL** as the primary database
+* **Redis** for caching and Celery message brokering
+* Background processing with **Celery**
+* Scheduled jobs with **Celery Beat**
+* JWT authentication with **refresh-token rotation and blacklisting**
+* Role-based access control for administrative endpoints
+* Full-text book search
+* Redis-backed caching for frequently accessed resources
+* API rate limiting for authenticated and anonymous clients
+* Token-based asynchronous password recovery
+* Consistent API error responses through a custom exception handler
+* OpenAPI documentation generated with **drf-spectacular**
+* Automated test suite with **pytest and coverage**
+* Code quality enforcement with **Ruff**
+* Separate development and production settings
+* CORS configuration and input sanitization
+* Automatic TLS certificate management with **Let's Encrypt / Certbot**
+
+---
 
 ## Tech Stack
 
-| Layer | Technology |
-|---|---|
-| Language | Python 3.12 |
-| Framework | Django 6 + Django REST Framework |
-| Database | PostgreSQL 16 |
-| Cache / Broker | Redis 7 |
-| Task queue | Celery 5 + django-celery-beat |
-| Auth | djangorestframework-simplejwt |
-| API docs | drf-spectacular (OpenAPI 3) |
-| Web server | Gunicorn + Nginx |
-| Containerization | Docker + Docker Compose |
-| Package manager | uv |
-| Linter / Formatter | Ruff |
-| Testing | pytest + coverage |
+| Area                 | Technology                  |
+| -------------------- | --------------------------- |
+| Language             | Python 3.12                 |
+| Backend              | Django 6                    |
+| REST API             | Django REST Framework 3.16  |
+| Database             | PostgreSQL 16               |
+| Cache                | Redis 7                     |
+| Background jobs      | Celery 5                    |
+| Scheduler            | django-celery-beat          |
+| Authentication       | Simple JWT                  |
+| Filtering            | django-filter               |
+| API schema           | drf-spectacular / OpenAPI 3 |
+| Application server   | Gunicorn                    |
+| Reverse proxy        | Nginx                       |
+| TLS                  | Let's Encrypt / Certbot     |
+| Containers           | Docker / Docker Compose     |
+| Package management   | uv                          |
+| Testing              | pytest / coverage           |
+| Linting & formatting | Ruff                        |
 
-## Project Structure
-
-```
-tome_track/
-├── apps/
-│   ├── books/        # Books, Authors, Tags
-│   ├── reviews/      # Book reviews
-│   ├── userbooks/    # Personal reading library
-│   ├── users/        # Auth, registration, profile, admin views
-│   └── common/       # Shared models, mixins, exceptions, pagination
-├── config/
-│   ├── settings/     # base.py / local.py / production.py
-│   ├── celery.py
-│   └── urls.py
-├── nginx/
-│   └── nginx.conf
-├── requirements/
-├── templates/
-│   └── emails/       # Password reset email templates
-├── docker-compose.yml
-├── Dockerfile
-└── manage.py
-```
+---
 
 ## Architecture
 
-The project follows a modular Django app structure where each domain is isolated into its own app:
+TomeTrack is structured as a modular Django application. Each domain is isolated into a dedicated app while shared infrastructure and reusable behavior live in `common`.
 
-- **users** — authentication, profile management, password reset, admin endpoints
-- **books** — books, authors, tags and full-text search
-- **userbooks** — personal reading library with progress tracking
-- **reviews** — book reviews with search
-- **common** — shared utilities: pagination, mixins, exceptions, validators, cache helpers
-
-### Key architectural decisions
-
-- **JWT authentication** with token rotation and blacklisting on logout
-- **Modular Django apps** — clear separation of domain concerns
-- **Caching layer** (Redis + django-redis) on high-traffic list endpoints
-- **Async email tasks** via Celery — password reset emails are dispatched as background jobs
-- **Rate limiting** — `60 req/min` for anonymous, `300 req/min` for authenticated users
-- **Custom exception handler** — all errors return a consistent JSON shape
-- **OpenAPI schema** auto-generated via drf-spectacular, available as Swagger UI and ReDoc
-
-## Data Model Overview
-
-Core entities and their relationships:
-
-```
-User
-  │
-  │ 1..*
-  ▼
-UserBook ◄──────── Book
-                    │
-                    │ *..*
-                    ▼
-                  Author
-                    │
-                    │ *..*   (also)
-                  Tag ◄──────Book
-
-User
-  │
-  │ 1..*
-  ▼
-Review ──────────► Book
+```text
+                        ┌─────────────────┐
+                        │     Client      │
+                        └────────┬────────┘
+                                 │ HTTPS
+                                 ▼
+                        ┌─────────────────┐
+                        │      Nginx      │
+                        │ TLS / Static    │
+                        └────────┬────────┘
+                                 │
+                                 ▼
+                        ┌─────────────────┐
+                        │    Gunicorn     │
+                        └────────┬────────┘
+                                 │
+                                 ▼
+                      ┌──────────────────────┐
+                      │   Django REST API    │
+                      └───────┬──────┬───────┘
+                              │      │
+                 ┌────────────┘      └────────────┐
+                 ▼                                ▼
+        ┌─────────────────┐              ┌─────────────────┐
+        │   PostgreSQL    │              │      Redis      │
+        │ Primary storage │              │ Cache / Broker  │
+        └─────────────────┘              └────────┬────────┘
+                                                  │
+                                      ┌───────────┴───────────┐
+                                      ▼                       ▼
+                              ┌───────────────┐       ┌───────────────┐
+                              │ Celery Worker │       │  Celery Beat  │
+                              │  Async tasks  │       │   Scheduler   │
+                              └───────────────┘       └───────────────┘
 ```
 
-| Model | Description |
-|---|---|
-| `User` | Custom user model with roles (`user` / `admin`) and JWT token versioning |
-| `Book` | Book entry with title, cover, description, type (`book` / `comic`), authors, tags |
-| `Author` | Author with name and slug |
-| `Tag` | Genre / category tag with name and slug |
-| `UserBook` | User–Book relation: reading status, current page/chapter, rating (0–10), re-read count, masterpiece flag |
-| `Review` | User review for a book: text content and rating |
-| `PasswordResetToken` | Secure one-time token for password reset flow |
+### Domain modules
 
-## Production Deployment
-
-The application runs fully containerised. The request flow is:
-
+```text
+apps/
+├── books/          Books, authors, tags and search
+├── reviews/        User reviews
+├── userbooks/      Personal libraries and reading progress
+├── users/          Authentication, profiles and administration
+└── common/         Shared infrastructure and utilities
 ```
-Client → Nginx (ports 80/443) → Gunicorn → Django → PostgreSQL
-                                         │
-                                       Redis
-                                         │
-                                    Celery Worker / Beat
-```
-
-- **Nginx** serves static files directly, handles TLS termination, and proxies API requests to Gunicorn
-- **Certbot** requests and renews Let's Encrypt certificates automatically using the `http-01` challenge
-- **Gunicorn** runs 3 workers by default (configurable)
-- **Celery Worker** handles async tasks (e.g. password reset emails)
-- **Celery Beat** manages periodic/scheduled tasks using `django-celery-beat` and a database scheduler
-
-To deploy with HTTPS:
-
-```bash
-cp .env.example .env.production
-# fill in all required production values, including:
-# DOMAIN_NAME=api.your-domain.com
-# LETSENCRYPT_EMAIL=admin@your-domain.com
-# LETSENCRYPT_STAGING=1  # 1 for first dry runs, then switch to 0
-docker-compose up --build -d
-```
-
-When certificates are issued, Nginx automatically switches from HTTP-only config to HTTPS with `80 -> 443` redirect.
-
-## Getting Started
-
-### Prerequisites
-
-- **Docker & Docker Compose** — for the containerised setup
-- **Python 3.12 + uv** — for local development without Docker
 
 ---
 
-### Option 1: Docker (recommended)
+## Key Design Decisions
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/<your-username>/tome_track.git
-cd tome_track
+### Modular domain structure
 
-# 2. Create the environment file
-cp .env.example .env.production
-# Edit .env.production and fill in all required values
+Instead of keeping all application logic in a single Django app, the backend is divided by domain:
 
-# 3. Build and start all services
-docker-compose up --build
+* `users`
+* `books`
+* `userbooks`
+* `reviews`
+* `common`
+
+This keeps models, serializers, views and domain-specific behavior separated as the application grows.
+
+### Stateless JWT authentication
+
+Authentication is based on short-lived JWT access tokens and refresh tokens.
+
+Refresh-token rotation is enabled, and previously issued refresh tokens are blacklisted after rotation or logout.
+
+This allows the API itself to remain stateless while still providing explicit session invalidation.
+
+### Redis caching
+
+Frequently requested resources can be served from Redis instead of repeatedly querying PostgreSQL.
+
+Caching is isolated behind shared helpers so cache behavior does not need to be duplicated across individual API views.
+
+### Asynchronous work
+
+Operations that should not block HTTP requests are delegated to Celery workers.
+
+For example:
+
+```text
+Password reset request
+        │
+        ▼
+Django creates reset token
+        │
+        ▼
+Task is sent to Redis
+        │
+        ▼
+Celery worker sends email
 ```
 
-The API will be available at:
-- **http://<your-domain>** during initial certificate challenge
-- **https://<your-domain>** after the first successful certificate issue
+Periodic tasks are managed separately by Celery Beat using a database-backed scheduler.
 
-Services started:
-- `django` — application server (Gunicorn)
-- `nginx` — reverse proxy and TLS terminator on ports 80/443
-- `certbot` — Let's Encrypt issuance + renewal loop
-- `db` — PostgreSQL 16
-- `redis` — Redis 7
-- `celery_worker` — async task worker
-- `celery_beat` — periodic task scheduler
+### Unified API errors
+
+A custom DRF exception handler normalizes application errors into a predictable JSON response format instead of exposing different error structures depending on their source.
+
+### Environment-specific configuration
+
+Django settings are separated into:
+
+```text
+config/settings/
+├── base.py
+├── local.py
+└── production.py
+```
+
+Development behavior therefore stays isolated from production security and deployment configuration.
 
 ---
 
-### Option 2: Local development
+## Features
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/<your-username>/tome_track.git
-cd tome_track
+### Authentication & Accounts
 
-# 2. Install dependencies
-uv sync
+* User registration
+* JWT login
+* Access-token refresh
+* Refresh-token rotation
+* Token blacklisting
+* Logout
+* Profile management
+* Email change
+* Password change
+* Password reset by email
+* Administrative user management
 
-# 3. Set up environment
-cp .env.example .env
-# Edit .env — set DEBUG=True, and point DATABASE_URL / REDIS_URL to local services
+### Books
 
-# 4. Apply migrations and run
-uv run python manage.py migrate
-uv run python manage.py runserver
+* Create, read, update and delete books
+* Multiple authors per book
+* Tags and categories
+* Book and comic types
+* Cover image uploads
+* Full-text search
+* Filtering by supported fields
+
+### Personal Library
+
+Users can maintain their own relationship with every book independently from the global book record.
+
+Tracked information includes:
+
+* Reading status
+* Current page
+* Current chapter
+* Personal rating
+* Re-read count
+* Masterpiece flag
+
+Available statuses:
+
+```text
+reading
+completed
+dropped
+plan_to_read
 ```
 
-> You will also need a running PostgreSQL and Redis instance for full functionality (email tasks require Celery + Redis).
+### Reviews
 
-## Environment Variables
+* Create reviews for books
+* Update and delete own reviews
+* Search reviews
+* Browse reviews for a book
+* Retrieve all reviews written by the current user
 
-Copy `.env.example` and fill in the values.
+---
 
-**Required for production:**
-`SECRET_KEY`, `DATABASE_URL`, `REDIS_URL`, `EMAIL_HOST`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`
+## Data Model
 
-**All variables:**
+The central distinction in TomeTrack is between a global `Book` and the user's personal relationship with that book represented by `UserBook`.
 
-| Variable | Description |
-|---|---|
-| `SECRET_KEY` | Django secret key |
-| `DEBUG` | `True` for development, `False` for production |
-| `ALLOWED_HOSTS` | Comma-separated list of allowed hostnames |
-| `DJANGO_SETTINGS_MODULE` | Settings module (e.g. `config.settings.production`) |
-| `DATABASE_URL` | PostgreSQL connection string |
-| `POSTGRES_DB` | Database name |
-| `POSTGRES_USER` | Database user |
-| `POSTGRES_PASSWORD` | Database password |
-| `REDIS_URL` | Redis connection string |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed frontend origins |
-| `FRONTEND_URL` | Base URL of the frontend (used in password reset emails) |
-| `EMAIL_HOST` | SMTP host |
-| `EMAIL_PORT` | SMTP port |
-| `EMAIL_USE_TLS` | `True` / `False` |
-| `EMAIL_HOST_USER` | SMTP username |
-| `EMAIL_HOST_PASSWORD` | SMTP password / app password |
-| `DEFAULT_FROM_EMAIL` | Sender address for outgoing emails |
-| `SERVER_EMAIL` | Sender used for Django error emails (defaults to `DEFAULT_FROM_EMAIL`) |
-| `ADMIN_ERROR_EMAILS` | Comma-separated recipients for unhandled exception reports |
+```text
+                         ┌──────────────┐
+                         │     User     │
+                         └──────┬───────┘
+                                │
+                     ┌──────────┴──────────┐
+                     │                     │
+                     ▼                     ▼
+              ┌────────────┐         ┌────────────┐
+              │  UserBook  │         │   Review   │
+              └─────┬──────┘         └─────┬──────┘
+                    │                      │
+                    └──────────┬───────────┘
+                               ▼
+                         ┌────────────┐
+                         │    Book    │
+                         └─────┬──────┘
+                               │
+                     ┌─────────┴─────────┐
+                     ▼                   ▼
+               ┌──────────┐        ┌──────────┐
+               │  Author  │        │   Tag    │
+               └──────────┘        └──────────┘
+```
+
+| Model                | Responsibility                                               |
+| -------------------- | ------------------------------------------------------------ |
+| `User`               | Custom account model, roles and authentication-related state |
+| `Book`               | Shared bibliographic entry                                   |
+| `Author`             | Book author                                                  |
+| `Tag`                | Genre or category                                            |
+| `UserBook`           | User-specific reading state and progress                     |
+| `Review`             | User-created review and rating                               |
+| `PasswordResetToken` | Expiring one-time password-reset token                       |
+
+---
+
+## Security
+
+TomeTrack applies security controls at several layers.
+
+### Authentication
+
+* JWT access and refresh tokens
+* Refresh-token rotation
+* Refresh-token blacklisting
+* Explicit logout invalidation
+
+### Authorization
+
+* Authenticated-user permissions
+* Object ownership checks
+* Administrative routes restricted to staff users
+
+### Request protection
+
+* Anonymous rate limit: `60 requests/minute`
+* Authenticated rate limit: `300 requests/minute`
+* Explicit CORS allowlist
+* Input validation through DRF serializers
+* HTML sanitization with `bleach`
+
+### Credentials
+
+Sensitive configuration is supplied through environment variables rather than committed to source control.
+
+### Passwords
+
+Password storage uses Django's password hashing infrastructure.
+
+Password-reset tokens are:
+
+* One-time use
+* Expiring
+* Delivered asynchronously by email
+
+### Production transport
+
+Production traffic is served through HTTPS.
+
+Nginx terminates TLS, while Certbot manages Let's Encrypt certificate issuance and renewal.
+
+---
 
 ## API Overview
 
-Interactive docs (DEBUG mode only):
-- Swagger UI: `GET /api/v1/schema/swagger-ui/`
-- ReDoc: `GET /api/v1/schema/redoc/`
+Base path:
 
-### Endpoints
+```text
+/api/v1/
+```
 
-#### Auth
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/v1/auth/register/` | Register a new user |
-| `POST` | `/api/v1/auth/token/` | Obtain JWT token pair |
-| `POST` | `/api/v1/auth/token/refresh/` | Refresh access token |
-| `POST` | `/api/v1/auth/logout/` | Logout (blacklist refresh token) |
+### Authentication
 
-#### Users
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET / PATCH` | `/api/v1/users/me/` | Get or update own profile |
-| `GET` | `/api/v1/users/me/reviews/` | List own reviews |
-| `POST` | `/api/v1/users/me/change-email/` | Change email address |
-| `POST` | `/api/v1/users/password/change/` | Change password |
-| `POST` | `/api/v1/users/password/reset/` | Request password reset email |
-| `POST` | `/api/v1/users/password/reset/confirm/` | Confirm password reset |
+| Method | Endpoint               | Description                        |
+| ------ | ---------------------- | ---------------------------------- |
+| `POST` | `/auth/register/`      | Register                           |
+| `POST` | `/auth/token/`         | Obtain JWT pair                    |
+| `POST` | `/auth/token/refresh/` | Refresh access token               |
+| `POST` | `/auth/logout/`        | Logout and blacklist refresh token |
 
-#### Books
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET / POST` | `/api/v1/books/` | List or create books |
-| `GET` | `/api/v1/books/search/` | Full-text search |
-| `GET / PUT / PATCH / DELETE` | `/api/v1/books/<id>/` | Book detail |
-| `GET / POST` | `/api/v1/authors/` | List or create authors |
-| `GET` | `/api/v1/authors/<id>/` | Author detail |
-| `GET / POST` | `/api/v1/tags/` | List or create tags |
-| `GET` | `/api/v1/tags/<id>/` | Tag detail |
+### Current User
 
-#### Personal Library
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET / POST` | `/api/v1/userbooks/` | List or add book to library |
-| `GET / PATCH / DELETE` | `/api/v1/userbooks/<id>/` | Get, update or remove entry |
+| Method        | Endpoint                         | Description                |
+| ------------- | -------------------------------- | -------------------------- |
+| `GET / PATCH` | `/users/me/`                     | Retrieve or update profile |
+| `GET`         | `/users/me/reviews/`             | Current user's reviews     |
+| `POST`        | `/users/me/change-email/`        | Change email               |
+| `POST`        | `/users/password/change/`        | Change password            |
+| `POST`        | `/users/password/reset/`         | Request password reset     |
+| `POST`        | `/users/password/reset/confirm/` | Confirm password reset     |
 
-Reading statuses: `reading`, `completed`, `dropped`, `plan_to_read`
+### Books
 
-#### Reviews
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET / POST` | `/api/v1/books/<id>/reviews/` | List or create reviews for a book |
-| `GET` | `/api/v1/books/<id>/reviews/search/` | Search within book reviews |
-| `GET / PATCH / DELETE` | `/api/v1/books/<id>/reviews/<id>/` | Review detail |
+| Method                       | Endpoint         | Description          |
+| ---------------------------- | ---------------- | -------------------- |
+| `GET / POST`                 | `/books/`        | List or create books |
+| `GET`                        | `/books/search/` | Search books         |
+| `GET / PUT / PATCH / DELETE` | `/books/<id>/`   | Book operations      |
+| `GET / POST`                 | `/authors/`      | Authors              |
+| `GET`                        | `/authors/<id>/` | Author detail        |
+| `GET / POST`                 | `/tags/`         | Tags                 |
+| `GET`                        | `/tags/<id>/`    | Tag detail           |
 
-#### Admin
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/v1/admin/users/` | List all users (admin only) |
-| `GET / PATCH` | `/api/v1/admin/users/<id>/` | Manage a user (admin only) |
+### Personal Library
 
-### Example: Register and authenticate
+| Method                 | Endpoint           | Description                |
+| ---------------------- | ------------------ | -------------------------- |
+| `GET / POST`           | `/userbooks/`      | List library or add a book |
+| `GET / PATCH / DELETE` | `/userbooks/<id>/` | Manage library entry       |
 
-```bash
-# Register
+### Reviews
+
+| Method                 | Endpoint                      | Description            |
+| ---------------------- | ----------------------------- | ---------------------- |
+| `GET / POST`           | `/books/<id>/reviews/`        | List or create reviews |
+| `GET`                  | `/books/<id>/reviews/search/` | Search reviews         |
+| `GET / PATCH / DELETE` | `/books/<id>/reviews/<id>/`   | Manage review          |
+
+### Administration
+
+| Method        | Endpoint             | Description |
+| ------------- | -------------------- | ----------- |
+| `GET`         | `/admin/users/`      | List users  |
+| `GET / PATCH` | `/admin/users/<id>/` | Manage user |
+
+---
+
+## API Documentation
+
+The OpenAPI schema is generated automatically with `drf-spectacular`.
+
+When documentation endpoints are enabled in the current environment:
+
+```text
+/api/v1/schema/swagger-ui/
+/api/v1/schema/redoc/
+```
+
+The API schema therefore stays synchronized with the actual serializers and endpoints instead of being maintained manually.
+
+---
+
+## Example Workflow
+
+### 1. Register
+
+```http
 POST /api/v1/auth/register/
+Content-Type: application/json
+```
+
+```json
 {
   "email": "user@example.com",
   "password": "securepassword",
   "username": "johndoe"
 }
+```
 
-# Obtain tokens
+### 2. Authenticate
+
+```http
 POST /api/v1/auth/token/
+Content-Type: application/json
+```
+
+```json
 {
   "email": "user@example.com",
   "password": "securepassword"
 }
-# → { "access": "<token>", "refresh": "<token>" }
 ```
 
-### Example: Add a book and track it
+Response:
 
-```bash
-# Create a book (admin/staff)
-POST /api/v1/books/
-Authorization: Bearer <access_token>
+```json
 {
-  "title": "The Hobbit",
-  "title_en": "The Hobbit",
-  "authors": [1],
-  "tags": [3, 5],
-  "book_type": "book",
-  "description": "A fantasy novel by J.R.R. Tolkien."
+  "access": "<access_token>",
+  "refresh": "<refresh_token>"
 }
-# → { "id": 42, "title": "The Hobbit", ... }
+```
 
-# Add to personal library
+### 3. Add a book to the personal library
+
+```http
 POST /api/v1/userbooks/
 Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+```json
 {
   "book": 42,
   "status": "reading",
@@ -361,74 +466,385 @@ Authorization: Bearer <access_token>
 }
 ```
 
-### Example: Write a review
+### 4. Write a review
 
-```bash
+```http
 POST /api/v1/books/42/reviews/
 Authorization: Bearer <access_token>
+Content-Type: application/json
+```
+
+```json
 {
   "text": "An absolute classic. Every page is a joy.",
   "rating": 9.5
 }
 ```
 
+---
+
 ## Pagination & Filtering
 
-All list endpoints support pagination:
+List endpoints use paginated responses.
 
-```
+Example:
+
+```http
 GET /api/v1/books/?page=2
 ```
 
-Default page size is **20** items. The response envelope:
+Default page size:
+
+```text
+20
+```
+
+Response:
 
 ```json
 {
   "count": 150,
   "next": "http://localhost/api/v1/books/?page=3",
   "previous": "http://localhost/api/v1/books/?page=1",
-  "results": [...]
+  "results": []
 }
 ```
 
-Filtering is available via `django-filter` on supported endpoints (e.g. filter books by tag, author, or type).
+Supported resources can also be filtered through `django-filter`.
 
-## Security
+Examples include filtering books by:
 
-The project implements several security measures:
+* Author
+* Tag
+* Book type
 
-- **JWT token rotation and blacklisting** — refresh tokens are invalidated on logout and after each rotation
-- **Rate limiting** — protects public endpoints from abuse
-- **Password hashing** — handled by Django's built-in PBKDF2 hasher
-- **CORS protection** — only explicitly allowed origins can make cross-origin requests
-- **Admin endpoints restricted** to users with `is_staff=True`
-- **Secure password reset** — one-time tokens with expiry, delivered via email
-- **Input sanitisation** — user-supplied HTML is sanitised with `bleach`
+---
 
-## Running Tests
+## Project Structure
+
+```text
+tome_track/
+├── apps/
+│   ├── books/
+│   │   └── # Books, authors, tags, search
+│   │
+│   ├── reviews/
+│   │   └── # Reviews and review search
+│   │
+│   ├── userbooks/
+│   │   └── # Personal libraries and reading progress
+│   │
+│   ├── users/
+│   │   └── # Authentication, profiles and administration
+│   │
+│   └── common/
+│       └── # Shared models, mixins, exceptions and utilities
+│
+├── config/
+│   ├── settings/
+│   │   ├── base.py
+│   │   ├── local.py
+│   │   └── production.py
+│   ├── celery.py
+│   └── urls.py
+│
+├── nginx/
+│   └── nginx.conf
+│
+├── templates/
+│   └── emails/
+│
+├── docker-compose.yml
+├── Dockerfile
+├── pyproject.toml
+└── manage.py
+```
+
+---
+
+# Running the Project
+
+## Prerequisites
+
+For the Docker setup:
+
+* Docker
+* Docker Compose
+
+For development without Docker:
+
+* Python 3.12
+* uv
+* PostgreSQL
+* Redis
+
+---
+
+## Docker
+
+Clone the repository:
 
 ```bash
-# Run the full test suite with coverage
-uv run coverage run -m pytest
+git clone https://github.com/balconyRewrap/tome_track.git
+cd tome_track
+```
 
-# View coverage report in the terminal
+Create the production environment:
+
+```bash
+cp .env.example .env.production
+```
+
+Fill in the required environment variables, then start the stack:
+
+```bash
+docker-compose up --build
+```
+
+The complete deployment starts:
+
+```text
+django
+nginx
+certbot
+db
+redis
+celery_worker
+celery_beat
+```
+
+For a detached production deployment:
+
+```bash
+docker-compose up --build -d
+```
+
+---
+
+## Local Development
+
+Clone the project:
+
+```bash
+git clone https://github.com/balconyRewrap/tome_track.git
+cd tome_track
+```
+
+Install dependencies:
+
+```bash
+uv sync
+```
+
+Create local configuration:
+
+```bash
+cp .env.example .env
+```
+
+Set:
+
+```text
+DEBUG=True
+```
+
+and configure local PostgreSQL and Redis connections.
+
+Apply migrations:
+
+```bash
+uv run python manage.py migrate
+```
+
+Start Django:
+
+```bash
+uv run python manage.py runserver
+```
+
+A running Celery worker is required for asynchronous tasks such as password-reset emails.
+
+---
+
+# Production Deployment
+
+The production stack is fully containerized.
+
+```text
+Internet
+   │
+   │ :80 / :443
+   ▼
+ Nginx
+   │
+   ▼
+Gunicorn
+   │
+   ▼
+Django
+ ├──────── PostgreSQL
+ └──────── Redis ─────── Celery
+                       └ Celery Beat
+```
+
+Nginx is responsible for:
+
+* Reverse proxying
+* TLS termination
+* Static files
+* HTTP → HTTPS redirection
+
+Certbot is responsible for:
+
+* Initial certificate issuance
+* Automatic certificate renewal
+
+To initialize a deployment:
+
+```bash
+cp .env.example .env.production
+```
+
+Configure at least:
+
+```dotenv
+DOMAIN_NAME=api.your-domain.com
+LETSENCRYPT_EMAIL=admin@your-domain.com
+LETSENCRYPT_STAGING=1
+```
+
+Start the stack:
+
+```bash
+docker-compose up --build -d
+```
+
+Using the Let's Encrypt staging environment for the first deployment avoids production rate limits during configuration testing.
+
+Once certificate issuance works correctly, switch:
+
+```dotenv
+LETSENCRYPT_STAGING=0
+```
+
+and redeploy.
+
+After a valid certificate is available, Nginx serves HTTPS traffic and redirects HTTP requests to port `443`.
+
+---
+
+# Environment Variables
+
+Create the appropriate environment file from:
+
+```text
+.env.example
+```
+
+Important production values include:
+
+```text
+SECRET_KEY
+DATABASE_URL
+REDIS_URL
+EMAIL_HOST
+EMAIL_HOST_USER
+EMAIL_HOST_PASSWORD
+```
+
+| Variable                 | Purpose                                   |
+| ------------------------ | ----------------------------------------- |
+| `SECRET_KEY`             | Django cryptographic secret               |
+| `DEBUG`                  | Development / production mode             |
+| `ALLOWED_HOSTS`          | Allowed HTTP hostnames                    |
+| `DJANGO_SETTINGS_MODULE` | Active Django settings module             |
+| `DATABASE_URL`           | PostgreSQL connection                     |
+| `POSTGRES_DB`            | PostgreSQL database                       |
+| `POSTGRES_USER`          | PostgreSQL user                           |
+| `POSTGRES_PASSWORD`      | PostgreSQL password                       |
+| `REDIS_URL`              | Redis connection                          |
+| `CORS_ALLOWED_ORIGINS`   | Permitted frontend origins                |
+| `FRONTEND_URL`           | Frontend base URL                         |
+| `EMAIL_HOST`             | SMTP server                               |
+| `EMAIL_PORT`             | SMTP port                                 |
+| `EMAIL_USE_TLS`          | SMTP TLS setting                          |
+| `EMAIL_HOST_USER`        | SMTP username                             |
+| `EMAIL_HOST_PASSWORD`    | SMTP password                             |
+| `DEFAULT_FROM_EMAIL`     | Default sender                            |
+| `SERVER_EMAIL`           | Django server-error sender                |
+| `ADMIN_ERROR_EMAILS`     | Recipients for server error notifications |
+| `DOMAIN_NAME`            | Production domain                         |
+| `LETSENCRYPT_EMAIL`      | Let's Encrypt registration email          |
+| `LETSENCRYPT_STAGING`    | Use Let's Encrypt staging environment     |
+
+---
+
+# Testing
+
+Run the complete test suite with coverage:
+
+```bash
+uv run coverage run -m pytest
+```
+
+Display coverage:
+
+```bash
 uv run coverage report
-
-# Generate HTML report
-uv run coverage html
-# then open htmlcov/index.html
 ```
 
-## Contributing
+Generate an HTML report:
 
-Pull requests are welcome. For major changes, please open an issue first to discuss what you would like to change.
+```bash
+uv run coverage html
+```
 
-Please make sure tests pass before submitting a PR:
+The generated report is available under:
+
+```text
+htmlcov/index.html
+```
+
+---
+
+# Code Quality
+
+Ruff is used for linting and formatting.
+
+Run checks:
+
+```bash
+uv run ruff check .
+```
+
+Run the formatter:
+
+```bash
+uv run ruff format .
+```
+
+---
+
+# Contributing
+
+Contributions are welcome.
+
+For significant changes, please open an issue before submitting a pull request so the proposed behavior can be discussed first.
+
+Before opening a PR, make sure the test suite passes:
 
 ```bash
 uv run coverage run -m pytest
 ```
 
-## License
+and verify code quality:
 
-This project is licensed under the [MIT License](LICENSE).
+```bash
+uv run ruff check .
+```
+
+---
+
+# License
+
+TomeTrack is released under the [MIT License](LICENSE).
